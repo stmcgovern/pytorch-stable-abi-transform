@@ -1,0 +1,17 @@
+mode: audit
+pytorch_root: /path/to/pytorch
+project_root: /path/to/vllm/csrc
+
+compiler_flags:
+  - -std=c++20
+  - -DUSE_CUDA
+
+include_paths:
+  - ${pytorch_root}/torch/csrc/api/include
+  - ${pytorch_root}
+  - ${pytorch_root}/torch/include
+  - /usr/local/cuda/include
+  - ${project_root}
+
+sources:
+  - ${project_root}/activation_kernels.cu
