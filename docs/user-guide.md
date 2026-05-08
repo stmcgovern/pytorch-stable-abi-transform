@@ -13,13 +13,13 @@
 
 ```bash
 # Fedora
-dnf install -y clang-devel llvm-devel
+dnf install -y clang-devel llvm-devel ninja-build
 
 # Ubuntu/Debian
-apt install -y libclang-19-dev libclang-cpp19-dev llvm-19-dev
+apt install -y libclang-19-dev libclang-cpp19-dev llvm-19-dev ninja-build
 
 # Build
-mkdir build && cd build && cmake .. && make -j$(nproc)
+mkdir -p build && cmake -GNinja -B build -S . && cmake --build build
 ```
 
 ## Configuration
