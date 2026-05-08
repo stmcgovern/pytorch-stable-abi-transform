@@ -12,11 +12,11 @@ The scope of this tool's "success" is compilation of the transformed code agains
 
 ```bash
 # Install LLVM dev libraries (see docs/user-guide.md for details)
-# Fedora: dnf install -y clang-devel llvm-devel
-# Ubuntu: apt install -y libclang-19-dev libclang-cpp19-dev llvm-19-dev
+# Fedora: dnf install -y clang-devel llvm-devel ninja-build
+# Ubuntu: apt install -y libclang-19-dev libclang-cpp19-dev llvm-19-dev ninja-build
 
 # Build (tested with LLVM 19, CUDA 12.9)
-mkdir build && cd build && cmake .. && make -j$(nproc) && cd ..
+mkdir -p build && cmake -GNinja -B build -S . && cmake --build build
 
 # Generate config
 ./build/stable-abi-transform --init-config > .stable-abi.yaml

@@ -5,8 +5,8 @@ Clang LibTooling source-to-source rewriter that transforms PyTorch C++ extension
 ## Build
 
 ```bash
-dnf install -y clang-devel llvm-devel  # Fedora 41, LLVM 19
-mkdir build && cd build && cmake .. && make -j$(nproc)
+dnf install -y clang-devel llvm-devel ninja-build  # Fedora 41, LLVM 19
+mkdir -p build && cmake -GNinja -B build -S . && cmake --build build
 ```
 
 Tested with: LLVM 19, CUDA 12.9, C++20.
