@@ -17,7 +17,7 @@ Tested with: LLVM 19, CUDA 12.9, C++20.
 PYTORCH_DIR=/path/to/pytorch RESOURCE_DIR=/usr/lib/clang/19 bash test/run_tests.sh
 ```
 
-11 test cases: input/expected pairs in `test/inputs/` and `test/expected/`.
+13 test cases: input/expected pairs in `test/inputs/` and `test/expected/`.
 
 ## Usage
 

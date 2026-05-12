@@ -14,9 +14,11 @@ class PreprocessorCallbacks : public clang::PPCallbacks {
 public:
     PreprocessorCallbacks(FileReplacements &fileRepls,
                           Reporter &reporter, clang::SourceManager &SM,
+                          const clang::LangOptions &langOpts,
                           bool rewrite_mode,
                           const std::string &projectRoot = "")
         : file_repls_(fileRepls), reporter_(reporter), SM_(SM),
+          lang_opts_(langOpts),
           rewrite_mode_(rewrite_mode), project_root_(projectRoot) {}
 
     void InclusionDirective(clang::SourceLocation HashLoc,
@@ -49,6 +51,7 @@ private:
     FileReplacements &file_repls_;
     Reporter &reporter_;
     clang::SourceManager &SM_;
+    const clang::LangOptions &lang_opts_;
     bool rewrite_mode_;
     std::string project_root_;
     std::set<std::string> emitted_includes_;

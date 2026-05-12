@@ -310,6 +310,8 @@ def generate_rules_h(
         ('c10::Float8_e4m3fnuz', 'torch::headeronly::Float8_e4m3fnuz'),
         ('c10::Float8_e5m2', 'torch::headeronly::Float8_e5m2'),
         ('c10::Float8_e5m2fnuz', 'torch::headeronly::Float8_e5m2fnuz'),
+        # Optional
+        ('c10::optional', 'std::optional'),
         # Template utilities
         ('c10::CppTypeToScalarType', 'torch::headeronly::CppTypeToScalarType'),
         # TensorOptions (flag-only: empty new_text)
@@ -335,12 +337,7 @@ def generate_rules_h(
     macro_rules = [
         ('TORCH_CHECK', 'STD_TORCH_CHECK', False),
         ('TORCH_CHECK_NOT_IMPLEMENTED', 'STD_TORCH_CHECK_NOT_IMPLEMENTED', False),
-        ('TORCH_CHECK_EQ', '', True),
-        ('TORCH_CHECK_NE', '', True),
-        ('TORCH_CHECK_GT', '', True),
-        ('TORCH_CHECK_GE', '', True),
-        ('TORCH_CHECK_LT', '', True),
-        ('TORCH_CHECK_LE', '', True),
+        # TORCH_CHECK_EQ/NE/LT/GT/GE/LE handled as special cases in PreprocessorCallbacks.cpp
         ('TORCH_LIBRARY', 'STABLE_TORCH_LIBRARY', False),
         ('TORCH_LIBRARY_EXPAND', 'STABLE_TORCH_LIBRARY_FRAGMENT', False),
         ('TORCH_LIBRARY_IMPL', 'STABLE_TORCH_LIBRARY_IMPL', False),
@@ -355,6 +352,8 @@ def generate_rules_h(
     lines.append('inline constexpr std::array kMacroRules = {')
     for old, new, flag in macro_rules:
         lines.append(f'    MacroRule{{"{old}", "{new}", {"true" if flag else "false"}}},')
+        if old == 'TORCH_CHECK_NOT_IMPLEMENTED':
+            lines.append('    // TORCH_CHECK_EQ/NE/LT/GT/GE/LE handled as special cases in PreprocessorCallbacks.cpp')
     lines.append('};')
     lines.append('')
 

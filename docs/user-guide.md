@@ -91,10 +91,10 @@ Switch modes by editing `mode:` in `.stable-abi.yaml` or passing `--mode=` on th
 | CUDA streams | `getCurrentCUDAStream()` -> `aoti_torch_get_current_cuda_stream()` | Yes |
 | Op registration | `TORCH_LIBRARY` -> `STABLE_TORCH_LIBRARY` | Yes |
 | Dispatch macros | `AT_DISPATCH_SWITCH` -> `THO_DISPATCH_SWITCH` | Yes |
+| Comparison macros | `TORCH_CHECK_EQ(a, b)` -> `STD_TORCH_CHECK((a) == (b))` | Yes |
+| `c10::optional<T>` | -> `std::optional<T>` | Yes |
 | TensorOptions | `torch::TensorOptions(...)` | Flagged |
 | PYBIND11_MODULE | Binding macro detection | Flagged |
-| Comparison macros | `TORCH_CHECK_EQ/NE/LT/GT/GE/LE` | Flagged |
-| `c10::optional<T>` | Use `std::optional<T>` instead | Flagged |
 | `elementSize(dtype)` | Standalone call (no tensor) | Flagged |
 | Project dispatch macros | e.g. `VLLM_DISPATCH_*` | Flagged |
 
@@ -202,4 +202,4 @@ PYTORCH_DIR=/path/to/pytorch RESOURCE_DIR=/usr/lib/clang/19 bash test/run_tests.
 
 `PYTORCH_DIR` is required (points to your PyTorch source tree). `RESOURCE_DIR` defaults to `/usr/lib/clang/19`.
 
-11 test cases with input/expected pairs in `test/inputs/` and `test/expected/`. The test suite runs three passes: rewrite correctness, regex verification, and compile-based verification.
+13 test cases with input/expected pairs in `test/inputs/` and `test/expected/`. The test suite runs three passes: rewrite correctness, regex verification, and compile-based verification.

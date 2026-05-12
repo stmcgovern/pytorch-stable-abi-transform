@@ -52,8 +52,8 @@ StableAbiFrontendAction::CreateASTConsumer(clang::CompilerInstance &CI,
     rewriter_.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
 
     auto ppCallbacks = std::make_unique<PreprocessorCallbacks>(
-        file_repls_, reporter_, CI.getSourceManager(), rewrite_mode_,
-        project_root_);
+        file_repls_, reporter_, CI.getSourceManager(), CI.getLangOpts(),
+        rewrite_mode_, project_root_);
     auto *ppRaw = ppCallbacks.get();
     CI.getPreprocessor().addPPCallbacks(std::move(ppCallbacks));
 

@@ -152,6 +152,37 @@ static bool isEnumQualifierType(std::string_view typeName) {
            typeName == "at::DeviceType" || typeName == "c10::DeviceType";
 }
 
+// Returns the bracket depth at `pos` in `text`, counting < and >.
+// A match inside template arguments (depth > 0) belongs to an inner
+// TypeLoc and should not be rewritten on the outer one.
+static unsigned templateDepthAt(std::string_view text, size_t pos) {
+    unsigned depth = 0;
+    for (size_t i = 0; i < pos; ++i) {
+        if (text[i] == '<') ++depth;
+        if (text[i] == '>' && depth > 0) --depth;
+    }
+    return depth;
+}
+
+// Returns the match position if `rule` matches `text` at template depth 0
+// with valid word boundaries, or std::string::npos otherwise.
+static size_t findTypeRuleMatch(std::string_view text, const TypeRule &rule) {
+    auto pos = text.find(rule.old_text);
+    if (pos == std::string::npos)
+        return std::string::npos;
+    if (templateDepthAt(text, pos) > 0)
+        return std::string::npos;
+    auto endPos = pos + rule.old_text.size();
+    if (endPos < text.size()) {
+        char next = text[endPos];
+        if (next == ':' && isEnumQualifierType(rule.old_text))
+            return std::string::npos;
+        if (std::isalnum(static_cast<unsigned char>(next)) || next == '_')
+            return std::string::npos;
+    }
+    return pos;
+}
+
 static void addTypeRules(std::vector<RewriteRule> &rules, Reporter &rep,
                          bool rewrite, const LocFilter &loc) {
     auto projectRoot = loc.projectRoot;
@@ -171,19 +202,9 @@ static void addTypeRules(std::vector<RewriteRule> &rules, Reporter &rep,
                                   R.Context->getLangOpts());
 
         for (const auto &rule : kTypeRules) {
-            auto pos = text.find(rule.old_text);
+            auto pos = findTypeRuleMatch(text, rule);
             if (pos == std::string::npos)
                 continue;
-
-            auto endPos = pos + rule.old_text.size();
-            if (endPos < text.size()) {
-                char next = text[endPos];
-                if (next == ':' && isEnumQualifierType(rule.old_text))
-                    continue;
-                if (std::isalnum(static_cast<unsigned char>(next)) ||
-                    next == '_')
-                    continue;
-            }
 
             const bool flag_only = rule.new_text.empty();
             std::string_view suggestion = flag_only
@@ -201,6 +222,7 @@ static void addTypeRules(std::vector<RewriteRule> &rules, Reporter &rep,
                               static_cast<unsigned>(rule.old_text.size()),
                               std::string(suggestion));
         }
+
         return noEdits();
     };
 
@@ -218,6 +240,7 @@ static void addTypeRules(std::vector<RewriteRule> &rules, Reporter &rep,
             "c10::Float8_e4m3fn", "c10::Float8_e4m3fnuz",
             "c10::Float8_e5m2", "c10::Float8_e5m2fnuz",
             "c10::CppTypeToScalarType",
+            "c10::optional", "std::optional",
             "torch::TensorOptions", "at::TensorOptions", "c10::TensorOptions"
         ))))))
             .bind("tl"),

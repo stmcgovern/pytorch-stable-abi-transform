@@ -61,6 +61,7 @@ inline constexpr std::array kTypeRules = {
     TypeRule{"c10::Float8_e4m3fnuz", "torch::headeronly::Float8_e4m3fnuz"},
     TypeRule{"c10::Float8_e5m2", "torch::headeronly::Float8_e5m2"},
     TypeRule{"c10::Float8_e5m2fnuz", "torch::headeronly::Float8_e5m2fnuz"},
+    TypeRule{"c10::optional", "std::optional"},
     TypeRule{"c10::CppTypeToScalarType", "torch::headeronly::CppTypeToScalarType"},
     TypeRule{"torch::TensorOptions", ""},
     TypeRule{"at::TensorOptions", ""},
@@ -76,12 +77,7 @@ struct MacroRule {
 inline constexpr std::array kMacroRules = {
     MacroRule{"TORCH_CHECK", "STD_TORCH_CHECK", false},
     MacroRule{"TORCH_CHECK_NOT_IMPLEMENTED", "STD_TORCH_CHECK_NOT_IMPLEMENTED", false},
-    MacroRule{"TORCH_CHECK_EQ", "", true},
-    MacroRule{"TORCH_CHECK_NE", "", true},
-    MacroRule{"TORCH_CHECK_GT", "", true},
-    MacroRule{"TORCH_CHECK_GE", "", true},
-    MacroRule{"TORCH_CHECK_LT", "", true},
-    MacroRule{"TORCH_CHECK_LE", "", true},
+    // TORCH_CHECK_EQ/NE/LT/GT/GE/LE handled as special cases in PreprocessorCallbacks.cpp
     MacroRule{"TORCH_LIBRARY", "STABLE_TORCH_LIBRARY", false},
     MacroRule{"TORCH_LIBRARY_EXPAND", "STABLE_TORCH_LIBRARY_FRAGMENT", false},
     MacroRule{"TORCH_LIBRARY_IMPL", "STABLE_TORCH_LIBRARY_IMPL", false},

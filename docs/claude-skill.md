@@ -86,8 +86,6 @@ If the tool reports `[FLAG]` findings, handle each manually:
 |---|---|
 | `TensorOptions(...)` | Decompose into individual params: `torch::stable::empty(shape, dtype, layout, device, pin_memory)` |
 | `PYBIND11_MODULE` | Replace with `STABLE_TORCH_LIBRARY_FRAGMENT` + `STABLE_TORCH_LIBRARY_IMPL` + `TORCH_BOX()` (see Section 4d) |
-| `TORCH_CHECK_EQ(a, b, msg)` | Expand to `STD_TORCH_CHECK(a == b, msg)` (similarly NE→!=, LT→<, GT→>, GE→>=, LE→<=) |
-| `c10::optional<T>` | Replace with `std::optional<T>` (C++17 equivalent, always available since stable ABI requires C++20) |
 | `elementSize(dtype_var)` | Rewrite to use a tensor method: `tensor.element_size()`, or compute manually from ScalarType |
 | Project dispatch macros (e.g. `VLLM_DISPATCH_*`) | Create stable versions using `THO_DISPATCH_SWITCH`/`THO_DISPATCH_CASE` (see Section 4b) |
 | DeviceGuard/CudaStream in macro body | Extract guard+stream code out of the macro, or rewrite the macro definition |
