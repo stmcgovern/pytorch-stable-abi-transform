@@ -9,3 +9,11 @@ void process(std::optional<torch::stable::Tensor> t, std::optional<int> scale) {
         STD_TORCH_CHECK(scale.has_value(), "need scale");
     }
 }
+
+std::optional<int> maybe_get() {
+    return std::nullopt;
+}
+
+::std::optional<int> maybe_get2() {
+    return std::nullopt;
+}

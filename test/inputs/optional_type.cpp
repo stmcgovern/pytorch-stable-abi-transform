@@ -5,3 +5,11 @@ void process(c10::optional<at::Tensor> t, c10::optional<int> scale) {
         TORCH_CHECK(scale.has_value(), "need scale");
     }
 }
+
+c10::optional<int> maybe_get() {
+    return c10::nullopt;
+}
+
+::c10::optional<int> maybe_get2() {
+    return ::c10::nullopt;
+}

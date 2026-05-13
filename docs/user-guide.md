@@ -93,6 +93,7 @@ Switch modes by editing `mode:` in `.stable-abi.yaml` or passing `--mode=` on th
 | Dispatch macros | `AT_DISPATCH_SWITCH` -> `THO_DISPATCH_SWITCH` | Yes |
 | Comparison macros | `TORCH_CHECK_EQ(a, b)` -> `STD_TORCH_CHECK((a) == (b))` | Yes |
 | `c10::optional<T>` | -> `std::optional<T>` | Yes |
+| `c10::nullopt` | -> `std::nullopt` | Yes |
 | TensorOptions | `torch::TensorOptions(...)` | Flagged |
 | PYBIND11_MODULE | Binding macro detection | Flagged |
 | `elementSize(dtype)` | Standalone call (no tensor) | Flagged |

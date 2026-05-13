@@ -896,6 +896,46 @@ static void addNbytesRule(std::vector<RewriteRule> &rules, Reporter &rep,
 }
 
 // ---------------------------------------------------------------------------
+// c10::nullopt → std::nullopt
+// ---------------------------------------------------------------------------
+
+static void addNulloptRule(std::vector<RewriteRule> &rules, Reporter &rep,
+                           bool rewrite, const LocFilter &loc) {
+    auto projectRoot = loc.projectRoot;
+    auto editGen = [&rep, rewrite, projectRoot](const MatchFinder::MatchResult &R)
+            -> llvm::Expected<SmallVector<Edit, 1>> {
+        const auto *DRE = R.Nodes.getNodeAs<DeclRefExpr>("nulloptRef");
+        if (!DRE)
+            return noEdits();
+
+        const auto &SM = *R.SourceManager;
+        auto rewriteLoc = getRewritableLoc(DRE->getBeginLoc(), SM, projectRoot);
+        if (!rewriteLoc)
+            return noEdits();
+
+        auto text = getSourceText(DRE->getSourceRange(), SM,
+                                  R.Context->getLangOpts());
+        if (text != "c10::nullopt" && text != "::c10::nullopt")
+            return noEdits();
+
+        rep.addFinding(FindingKind::Type, SM, DRE->getBeginLoc(),
+                       text, "std::nullopt");
+        if (!rewrite)
+            return noEdits();
+
+        return singleEdit(*rewriteLoc,
+                          static_cast<unsigned>(text.size()),
+                          "std::nullopt");
+    };
+
+    rules.push_back(makeRule(
+        declRefExpr(loc.stmt,
+                    to(namedDecl(hasName("std::nullopt"))))
+            .bind("nulloptRef"),
+        EditGenerator(editGen)));
+}
+
+// ---------------------------------------------------------------------------
 // Catch-all detectors for unstable API usage
 // ---------------------------------------------------------------------------
 
@@ -1018,6 +1058,7 @@ RewriteRule buildTransformerRules(Reporter &rep, bool rewrite_mode,
     addElementSizeRules(rules, rep, rewrite_mode, loc);
     addFreeFuncRules(rules, rep, rewrite_mode, loc);
     addNbytesRule(rules, rep, rewrite_mode, loc);
+    addNulloptRule(rules, rep, rewrite_mode, loc);
     addUnstableTypeCatchAll(rules, rep, loc);
     addUnstableRefCatchAll(rules, rep, loc);
     return applyFirst(rules);

@@ -6,3 +6,8 @@ void launch(torch::Tensor& input) {
     const at::cuda::OptionalCUDAGuard device_guard(device_of(input));
     const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 }
+
+void launch_v2(torch::Tensor& input) {
+    const at::cuda::OptionalCUDAGuard device_guard(input.device());
+    const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+}

@@ -260,6 +260,8 @@ static const std::vector<ForbiddenPattern> &getForbiddenPatterns() {
          "unstable method: .dtype() (use .scalar_type())"},
         {std::regex(R"(\bc10::optional\b)"),
          "unstable type: c10::optional (use std::optional)"},
+        {std::regex(R"(\bc10::nullopt\b)"),
+         "unstable value: c10::nullopt (use std::nullopt)"},
         {std::regex(R"(\btorch::TensorOptions\b)"),
          "unstable type: torch::TensorOptions (decompose into scalar_type, layout, device args)"},
         {std::regex(R"(\bat::Half\b)"),
