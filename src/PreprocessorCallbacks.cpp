@@ -186,8 +186,13 @@ void PreprocessorCallbacks::MacroExpands(const clang::Token &MacroNameTok,
 
         std::string lhs = getArgText(0);
         std::string rhs = getArgText(1);
-        if (lhs.empty() || rhs.empty())
-            break;
+        if (lhs.empty() || rhs.empty()) {
+            reporter_.addFinding(FindingKind::Macro, SM_, loc,
+                                 cmp.name,
+                                 "could not extract arguments — rewrite manually",
+                                 true);
+            return;
+        }
 
         std::string repl = "STD_TORCH_CHECK((" + lhs + ") " +
                            cmp.op.str() + " (" + rhs + "))";
