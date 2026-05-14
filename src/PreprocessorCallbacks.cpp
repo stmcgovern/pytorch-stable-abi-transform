@@ -4,6 +4,7 @@
 #include <clang/Basic/IdentifierTable.h>
 #include <clang/Lex/Lexer.h>
 #include <clang/Lex/MacroArgs.h>
+#include <clang/Lex/MacroInfo.h>
 
 namespace stable_abi {
 
@@ -138,9 +139,21 @@ void PreprocessorCallbacks::MacroExpands(const clang::Token &MacroNameTok,
 
     if (SM_.isMacroBodyExpansion(loc)) {
         auto spellLoc = SM_.getSpellingLoc(loc);
+        bool isUnstablePrefix =
+            name.starts_with("TORCH_") || name.starts_with("AT_") ||
+            name.starts_with("C10_") || name == "PYBIND11_MODULE";
+        bool isDefinedInStableHeader = false;
+        if (isUnstablePrefix) {
+            if (auto *MI = MD.getMacroInfo()) {
+                auto defFile = SM_.getFilename(MI->getDefinitionLoc());
+                isDefinedInStableHeader =
+                    defFile.contains("torch/csrc/stable/") ||
+                    defFile.contains("torch/headeronly/") ||
+                    defFile.contains("torch/csrc/inductor/aoti_torch/");
+            }
+        }
         if (isInProjectScope(SM_, spellLoc, project_root_) &&
-            (name.starts_with("TORCH_") || name.starts_with("AT_") ||
-             name.starts_with("C10_") || name == "PYBIND11_MODULE")) {
+            isUnstablePrefix && !isDefinedInStableHeader) {
             reporter_.addFinding(FindingKind::Macro, SM_, spellLoc, name,
                                  "unstable macro in macro body", true);
         }

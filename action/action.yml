@@ -59,6 +59,7 @@ runs:
         RESOURCE_DIR=$(llvm-config-19 --prefix)/lib/clang/$(llvm-config-19 --version | cut -d. -f1)
 
         ARGS="--mode=${{ inputs.mode }} --format=${{ inputs.format }}"
+        ARGS="$ARGS --pytorch-root=$PYTORCH"
 
         for src in ${{ inputs.sources }}; do
           if [ -d "$src" ]; then
@@ -68,6 +69,6 @@ runs:
           fi
         done
 
-        $TOOL $ARGS -- -std=c++20 -resource-dir "$RESOURCE_DIR" \
+        "$TOOL" $ARGS -- -std=c++20 -resource-dir "$RESOURCE_DIR" \
           -I"$PYTORCH" -I"$PYTORCH/torch/csrc/api/include" \
           ${{ inputs.extra-args }}
