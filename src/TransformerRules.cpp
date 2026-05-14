@@ -241,6 +241,8 @@ static void addTypeRules(std::vector<RewriteRule> &rules, Reporter &rep,
             "c10::Float8_e5m2", "c10::Float8_e5m2fnuz",
             "c10::CppTypeToScalarType",
             "c10::optional", "std::optional",
+            "c10::ArrayRef", "c10::IntArrayRef", "at::IntArrayRef",
+            "c10::string_view", "std::string_view",
             "torch::TensorOptions", "at::TensorOptions", "c10::TensorOptions"
         ))))))
             .bind("tl"),

@@ -134,13 +134,20 @@ void PreprocessorCallbacks::MacroExpands(const clang::Token &MacroNameTok,
                                          clang::SourceRange Range,
                                          const clang::MacroArgs *Args) {
     auto loc = MacroNameTok.getLocation();
-
-    if (!isInProjectScope(SM_, loc, project_root_))
-        return;
-
     auto name = MacroNameTok.getIdentifierInfo()->getName();
 
-    if (SM_.isMacroBodyExpansion(loc))
+    if (SM_.isMacroBodyExpansion(loc)) {
+        auto spellLoc = SM_.getSpellingLoc(loc);
+        if (isInProjectScope(SM_, spellLoc, project_root_) &&
+            (name.starts_with("TORCH_") || name.starts_with("AT_") ||
+             name.starts_with("C10_") || name == "PYBIND11_MODULE")) {
+            reporter_.addFinding(FindingKind::Macro, SM_, spellLoc, name,
+                                 "unstable macro in macro body", true);
+        }
+        return;
+    }
+
+    if (!isInProjectScope(SM_, loc, project_root_))
         return;
 
     if (name == "PYBIND11_MODULE") {

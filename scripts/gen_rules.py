@@ -312,6 +312,11 @@ def generate_rules_h(
         ('c10::Float8_e5m2fnuz', 'torch::headeronly::Float8_e5m2fnuz'),
         # Optional
         ('c10::optional', 'std::optional'),
+        # ArrayRef / string_view
+        ('c10::ArrayRef', 'torch::headeronly::HeaderOnlyArrayRef'),
+        ('c10::IntArrayRef', 'torch::headeronly::IntHeaderOnlyArrayRef'),
+        ('at::IntArrayRef', 'torch::headeronly::IntHeaderOnlyArrayRef'),
+        ('c10::string_view', 'std::string_view'),
         # Template utilities
         ('c10::CppTypeToScalarType', 'torch::headeronly::CppTypeToScalarType'),
         # TensorOptions (flag-only: empty new_text)

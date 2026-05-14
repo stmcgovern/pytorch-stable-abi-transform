@@ -94,7 +94,11 @@ Switch modes by editing `mode:` in `.stable-abi.yaml` or passing `--mode=` on th
 | Comparison macros | `TORCH_CHECK_EQ(a, b)` -> `STD_TORCH_CHECK((a) == (b))` | Yes |
 | `c10::optional<T>` | -> `std::optional<T>` | Yes |
 | `c10::nullopt` | -> `std::nullopt` | Yes |
+| `c10::ArrayRef<T>` | -> `torch::headeronly::HeaderOnlyArrayRef<T>` | Yes |
+| `c10::IntArrayRef` | -> `torch::headeronly::IntHeaderOnlyArrayRef` | Yes |
+| `c10::string_view` | -> `std::string_view` | Yes |
 | TensorOptions | `torch::TensorOptions(...)` | Flagged |
+| Unstable macros in macro bodies | `TORCH_CHECK` etc. inside `#define` | Flagged |
 | PYBIND11_MODULE | Binding macro detection | Flagged |
 | `elementSize(dtype)` | Standalone call (no tensor) | Flagged |
 | Project dispatch macros | e.g. `VLLM_DISPATCH_*` | Flagged |
