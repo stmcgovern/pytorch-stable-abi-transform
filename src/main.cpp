@@ -8,7 +8,12 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Path.h>
+#include <optional>
 #include <string_view>
+
+using stable_abi::Mode;
+using stable_abi::OutputFormat;
+using stable_abi::VerifyMethod;
 
 static void printVersion(llvm::raw_ostream &OS) {
     OS << "stable-abi-transform " << TOOL_VERSION << "\n";
@@ -18,14 +23,14 @@ static llvm::cl::OptionCategory
     ToolCategory("stable-abi-transform options");
 
 static llvm::cl::opt<std::string>
-    Mode("mode",
-         llvm::cl::desc("Operating mode: audit (default), rewrite, or verify"),
-         llvm::cl::init("audit"), llvm::cl::cat(ToolCategory));
+    ModeOpt("mode",
+            llvm::cl::desc("Operating mode: audit (default), rewrite, or verify"),
+            llvm::cl::init("audit"), llvm::cl::cat(ToolCategory));
 
 static llvm::cl::opt<std::string>
-    Format("format",
-           llvm::cl::desc("Output format: text (default) or json"),
-           llvm::cl::init("text"), llvm::cl::cat(ToolCategory));
+    FormatOpt("format",
+              llvm::cl::desc("Output format: text (default) or json"),
+              llvm::cl::init("text"), llvm::cl::cat(ToolCategory));
 
 static llvm::cl::opt<std::string>
     PytorchRoot("pytorch-root",
@@ -43,9 +48,9 @@ static llvm::cl::opt<std::string>
                 llvm::cl::init(""), llvm::cl::cat(ToolCategory));
 
 static llvm::cl::opt<std::string>
-    VerifyMethod("verify-method",
-                 llvm::cl::desc("Verification method: compile (default) or regex"),
-                 llvm::cl::init("compile"), llvm::cl::cat(ToolCategory));
+    VerifyMethodOpt("verify-method",
+                    llvm::cl::desc("Verification method: compile (default) or regex"),
+                    llvm::cl::init("compile"), llvm::cl::cat(ToolCategory));
 
 static llvm::cl::opt<std::string>
     ProjectRoot("project-root",
@@ -88,6 +93,25 @@ static std::string detectCudaInclude() {
     return "";
 }
 
+static std::optional<Mode> parseMode(llvm::StringRef s) {
+    if (s == "audit") return Mode::Audit;
+    if (s == "rewrite") return Mode::Rewrite;
+    if (s == "verify") return Mode::Verify;
+    return std::nullopt;
+}
+
+static std::optional<OutputFormat> parseFormat(llvm::StringRef s) {
+    if (s == "text") return OutputFormat::Text;
+    if (s == "json") return OutputFormat::Json;
+    return std::nullopt;
+}
+
+static std::optional<VerifyMethod> parseVerifyMethod(llvm::StringRef s) {
+    if (s == "compile") return VerifyMethod::Compile;
+    if (s == "regex") return VerifyMethod::Regex;
+    return std::nullopt;
+}
+
 static stable_abi::VerifyOptions buildVerifyOptions(
     const std::string &resourceDir,
     const std::string &pytorchRoot,
@@ -108,10 +132,11 @@ static int runVerify(const std::vector<std::string> &sources,
                      const std::string &pytorchRoot,
                      const std::vector<std::string> &extraIncludes,
                      const std::string &cudaInclude,
-                     const std::string &verifyMethod,
-                     bool json,
+                     VerifyMethod method,
+                     OutputFormat format,
                      bool allow_fallback = false) {
-    bool use_compile = (verifyMethod == "compile");
+    bool use_compile = (method == VerifyMethod::Compile);
+    bool json = (format == OutputFormat::Json);
     auto opts = buildVerifyOptions(resourceDir, pytorchRoot,
                                    extraIncludes, cudaInclude);
 
@@ -172,22 +197,45 @@ static bool tryLoadConfig(stable_abi::Config &cfg, std::string &error) {
     return true;
 }
 
-static void applyCliOverrides(stable_abi::Config &cfg) {
-    if (Mode.getNumOccurrences() > 0)
-        cfg.mode = Mode.getValue();
-    if (Format.getNumOccurrences() > 0)
-        cfg.format = Format.getValue();
+static bool applyCliOverrides(stable_abi::Config &cfg) {
+    if (ModeOpt.getNumOccurrences() > 0) {
+        auto m = parseMode(ModeOpt.getValue());
+        if (!m) {
+            llvm::errs() << "error: invalid mode '" << ModeOpt.getValue()
+                         << "'. Must be one of: audit, rewrite, verify\n";
+            return false;
+        }
+        cfg.mode = *m;
+    }
+    if (FormatOpt.getNumOccurrences() > 0) {
+        auto f = parseFormat(FormatOpt.getValue());
+        if (!f) {
+            llvm::errs() << "error: invalid format '" << FormatOpt.getValue()
+                         << "'. Must be one of: text, json\n";
+            return false;
+        }
+        cfg.format = *f;
+    }
     if (PytorchRoot.getNumOccurrences() > 0)
         cfg.pytorch_root = PytorchRoot.getValue();
     if (ProjectRoot.getNumOccurrences() > 0)
         cfg.project_root = ProjectRoot.getValue();
-    if (VerifyMethod.getNumOccurrences() > 0)
-        cfg.verify_method = VerifyMethod.getValue();
+    if (VerifyMethodOpt.getNumOccurrences() > 0) {
+        auto v = parseVerifyMethod(VerifyMethodOpt.getValue());
+        if (!v) {
+            llvm::errs() << "error: invalid verify-method '"
+                         << VerifyMethodOpt.getValue()
+                         << "'. Must be one of: compile, regex\n";
+            return false;
+        }
+        cfg.verify_method = *v;
+    }
     if (CudaInclude.getNumOccurrences() > 0)
         cfg.cuda_include = CudaInclude.getValue();
     if (ExtraIncludes.getNumOccurrences() > 0)
         cfg.extra_includes = std::vector<std::string>(
             ExtraIncludes.begin(), ExtraIncludes.end());
+    return true;
 }
 
 static bool validateSources(const std::vector<std::string> &sources) {
@@ -203,15 +251,9 @@ static bool validateSources(const std::vector<std::string> &sources) {
 
 static int runWithConfig(stable_abi::Config &cfg,
                          clang::tooling::CompilationDatabase *externalDB = nullptr) {
-    if (cfg.mode != "audit" && cfg.mode != "rewrite" && cfg.mode != "verify") {
-        llvm::errs() << "error: unknown mode '" << cfg.mode
-                     << "'. Must be one of: audit, rewrite, verify\n";
-        return 1;
-    }
-
     auto resourceDir = detectResourceDir();
 
-    bool json = (cfg.format == "json");
+    bool json = (cfg.format == OutputFormat::Json);
 
     std::string projectRoot = cfg.project_root;
     if (!projectRoot.empty()) {
@@ -245,13 +287,13 @@ static int runWithConfig(stable_abi::Config &cfg,
     if (!validateSources(sources))
         return 1;
 
-    if (cfg.mode == "verify") {
+    if (cfg.mode == Mode::Verify) {
         return runVerify(sources, resourceDir, cfg.pytorch_root,
                          cfg.extra_includes, cfg.cuda_include,
-                         cfg.verify_method, json);
+                         cfg.verify_method, cfg.format);
     }
 
-    bool rewrite = (cfg.mode == "rewrite");
+    bool rewrite = (cfg.mode == Mode::Rewrite);
 
     std::unique_ptr<clang::tooling::FixedCompilationDatabase> ownedDB;
     clang::tooling::CompilationDatabase *db = externalDB;
@@ -305,7 +347,7 @@ static int runWithConfig(stable_abi::Config &cfg,
             llvm::outs() << "\n--- Post-rewrite ABI verification ---\n";
         int verify_result = runVerify(sources, resourceDir, cfg.pytorch_root,
                                       cfg.extra_includes, cfg.cuda_include,
-                                      cfg.verify_method, json, true);
+                                      cfg.verify_method, cfg.format, true);
         if (verify_result > 0) {
             if (!json)
                 llvm::outs() << "\nUnstable API references remain. "
@@ -355,7 +397,8 @@ int main(int argc, const char **argv) {
     clang::tooling::CommonOptionsParser &OptionsParser = ExpectedParser.get();
 
     if (hasConfig) {
-        applyCliOverrides(cfg);
+        if (!applyCliOverrides(cfg))
+            return 1;
         auto &cliSources = OptionsParser.getSourcePathList();
         if (!cliSources.empty())
             cfg.sources = cliSources;
@@ -383,13 +426,8 @@ int main(int argc, const char **argv) {
         return 1;
     }
 
-    cfg.mode = Mode.getValue();
-    cfg.format = Format.getValue();
-    cfg.pytorch_root = PytorchRoot.getValue();
-    cfg.project_root = ProjectRoot.getValue();
-    cfg.verify_method = VerifyMethod.getValue();
-    cfg.cuda_include = CudaInclude.getValue();
-    cfg.extra_includes = {ExtraIncludes.begin(), ExtraIncludes.end()};
+    if (!applyCliOverrides(cfg))
+        return 1;
     cfg.sources = cliSources;
     return runWithConfig(cfg, &OptionsParser.getCompilations());
 }

@@ -5,9 +5,21 @@
 // Do not edit manually. Re-run gen_rules.py to update.
 
 #include <array>
+#include <concepts>
+#include <ranges>
 #include <string_view>
 
 namespace stable_abi {
+
+template <typename R>
+concept MappingRule = requires(const R &r) {
+    { r.from } -> std::convertible_to<std::string_view>;
+    { r.to   } -> std::convertible_to<std::string_view>;
+};
+
+template <typename T>
+concept MappingRuleRange = std::ranges::range<T> &&
+    MappingRule<std::ranges::range_value_t<T>>;
 
 // Include rules are structural and hand-maintained.
 // The stable headers don't encode which unstable headers map to them.
@@ -34,8 +46,8 @@ inline constexpr std::array kIncludeRules = {
 };
 
 struct TypeRule {
-    std::string_view old_text;
-    std::string_view new_text;
+    std::string_view from;
+    std::string_view to;
 };
 
 inline constexpr std::array kTypeRules = {
@@ -73,8 +85,8 @@ inline constexpr std::array kTypeRules = {
 };
 
 struct MacroRule {
-    std::string_view old_name;
-    std::string_view new_name;
+    std::string_view from;
+    std::string_view to;
     bool flag_only;
 };
 
@@ -94,8 +106,8 @@ inline constexpr std::array kMacroRules = {
 };
 
 struct ScalarTypeShorthand {
-    std::string_view old_text;
-    std::string_view new_text;
+    std::string_view from;
+    std::string_view to;
 };
 
 inline constexpr std::array kScalarTypeShorthands = {
@@ -156,8 +168,8 @@ inline constexpr std::array kScalarTypeShorthands = {
 };
 
 struct DeviceTypeShorthand {
-    std::string_view old_text;
-    std::string_view new_text;
+    std::string_view from;
+    std::string_view to;
 };
 
 inline constexpr std::array kDeviceTypeShorthands = {
@@ -206,8 +218,8 @@ inline constexpr std::array kDeviceTypeShorthands = {
 };
 
 struct MethodToFreeFunc {
-    std::string_view method_name;
-    std::string_view free_func;
+    std::string_view from;
+    std::string_view to;
 };
 
 inline constexpr std::array kMethodToFreeFuncRules = {
@@ -236,8 +248,8 @@ inline constexpr std::array kMethodToFreeFuncRules = {
 };
 
 struct MethodRenameRule {
-    std::string_view old_name;
-    std::string_view new_name;
+    std::string_view from;
+    std::string_view to;
 };
 
 inline constexpr std::array kMethodRenameRules = {
@@ -274,8 +286,8 @@ inline constexpr std::array kDispatchConvRules = {
 };
 
 struct FreeFuncRule {
-    std::string_view old_qualified;
-    std::string_view new_qualified;
+    std::string_view from;
+    std::string_view to;
 };
 
 inline constexpr std::array kFreeFuncRules = {

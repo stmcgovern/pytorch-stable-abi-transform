@@ -272,8 +272,8 @@ def generate_rules_h(
 
     # --- Type rules (derived from stable headers) ---
     lines.append('struct TypeRule {')
-    lines.append('    std::string_view old_text;')
-    lines.append('    std::string_view new_text;')
+    lines.append('    std::string_view from;')
+    lines.append('    std::string_view to;')
     lines.append('};')
     lines.append('')
 
@@ -319,7 +319,7 @@ def generate_rules_h(
         ('c10::string_view', 'std::string_view'),
         # Template utilities
         ('c10::CppTypeToScalarType', 'torch::headeronly::CppTypeToScalarType'),
-        # TensorOptions (flag-only: empty new_text)
+        # TensorOptions (flag-only: empty to)
         ('torch::TensorOptions', ''),
         ('at::TensorOptions', ''),
         ('c10::TensorOptions', ''),
@@ -333,8 +333,8 @@ def generate_rules_h(
 
     # --- Macro rules ---
     lines.append('struct MacroRule {')
-    lines.append('    std::string_view old_name;')
-    lines.append('    std::string_view new_name;')
+    lines.append('    std::string_view from;')
+    lines.append('    std::string_view to;')
     lines.append('    bool flag_only;')
     lines.append('};')
     lines.append('')
@@ -364,8 +364,8 @@ def generate_rules_h(
 
     # --- Scalar type shorthands (derived from enum) ---
     lines.append('struct ScalarTypeShorthand {')
-    lines.append('    std::string_view old_text;')
-    lines.append('    std::string_view new_text;')
+    lines.append('    std::string_view from;')
+    lines.append('    std::string_view to;')
     lines.append('};')
     lines.append('')
     lines.append('inline constexpr std::array kScalarTypeShorthands = {')
@@ -378,8 +378,8 @@ def generate_rules_h(
 
     # --- Device type shorthands (derived from enum) ---
     lines.append('struct DeviceTypeShorthand {')
-    lines.append('    std::string_view old_text;')
-    lines.append('    std::string_view new_text;')
+    lines.append('    std::string_view from;')
+    lines.append('    std::string_view to;')
     lines.append('};')
     lines.append('')
     lines.append('inline constexpr std::array kDeviceTypeShorthands = {')
@@ -392,8 +392,8 @@ def generate_rules_h(
 
     # --- Method-to-free-function rules (derived from ops.h) ---
     lines.append('struct MethodToFreeFunc {')
-    lines.append('    std::string_view method_name;')
-    lines.append('    std::string_view free_func;')
+    lines.append('    std::string_view from;')
+    lines.append('    std::string_view to;')
     lines.append('};')
     lines.append('')
 
@@ -420,8 +420,8 @@ def generate_rules_h(
 
     # --- Method rename rules ---
     lines.append('struct MethodRenameRule {')
-    lines.append('    std::string_view old_name;')
-    lines.append('    std::string_view new_name;')
+    lines.append('    std::string_view from;')
+    lines.append('    std::string_view to;')
     lines.append('};')
     lines.append('')
     lines.append('inline constexpr std::array kMethodRenameRules = {')
@@ -432,8 +432,8 @@ def generate_rules_h(
 
     # --- Free function namespace rules (derived from ops.h) ---
     lines.append('struct FreeFuncRule {')
-    lines.append('    std::string_view old_qualified;')
-    lines.append('    std::string_view new_qualified;')
+    lines.append('    std::string_view from;')
+    lines.append('    std::string_view to;')
     lines.append('};')
     lines.append('')
 

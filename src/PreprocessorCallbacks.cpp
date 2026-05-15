@@ -244,32 +244,32 @@ void PreprocessorCallbacks::MacroExpands(const clang::Token &MacroNameTok,
     }
 
     for (const auto &rule : kMacroRules) {
-        if (name != llvm::StringRef(rule.old_name))
+        if (name != llvm::StringRef(rule.from))
             continue;
 
         if (rule.flag_only) {
             std::string suggestion;
-            if (!rule.new_name.empty()) {
+            if (!rule.to.empty()) {
                 suggestion =
-                    std::string("use ") + std::string(rule.new_name);
+                    std::string("use ") + std::string(rule.to);
             } else {
                 suggestion =
                     "no stable equivalent — rewrite with STD_TORCH_CHECK";
             }
             reporter_.addFinding(FindingKind::Macro, SM_, loc,
-                                 std::string(rule.old_name), suggestion,
+                                 std::string(rule.from), suggestion,
                                  true);
             return;
         }
 
         reporter_.addFinding(FindingKind::Macro, SM_, loc,
-                             std::string(rule.old_name),
-                             std::string(rule.new_name));
+                             std::string(rule.from),
+                             std::string(rule.to));
 
         if (rewrite_mode_) {
             auto nameLen = MacroNameTok.getLength();
             addReplacement(file_repls_, SM_, loc, nameLen,
-                           rule.new_name);
+                           rule.to);
         }
         return;
     }

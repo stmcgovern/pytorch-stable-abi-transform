@@ -167,15 +167,15 @@ static unsigned templateDepthAt(std::string_view text, size_t pos) {
 // Returns the match position if `rule` matches `text` at template depth 0
 // with valid word boundaries, or std::string::npos otherwise.
 static size_t findTypeRuleMatch(std::string_view text, const TypeRule &rule) {
-    auto pos = text.find(rule.old_text);
+    auto pos = text.find(rule.from);
     if (pos == std::string::npos)
         return std::string::npos;
     if (templateDepthAt(text, pos) > 0)
         return std::string::npos;
-    auto endPos = pos + rule.old_text.size();
+    auto endPos = pos + rule.from.size();
     if (endPos < text.size()) {
         char next = text[endPos];
-        if (next == ':' && isEnumQualifierType(rule.old_text))
+        if (next == ':' && isEnumQualifierType(rule.from))
             return std::string::npos;
         if (std::isalnum(static_cast<unsigned char>(next)) || next == '_')
             return std::string::npos;
@@ -206,20 +206,20 @@ static void addTypeRules(std::vector<RewriteRule> &rules, Reporter &rep,
             if (pos == std::string::npos)
                 continue;
 
-            const bool flag_only = rule.new_text.empty();
+            const bool flag_only = rule.to.empty();
             std::string_view suggestion = flag_only
                 ? "decompose into explicit scalar_type, layout, device args"
-                : rule.new_text;
+                : rule.to;
 
             rep.addFinding(FindingKind::Type, SM, TL->getBeginLoc(),
-                           rule.old_text, suggestion, flag_only);
+                           rule.from, suggestion, flag_only);
             if (!rewrite || flag_only)
                 return noEdits();
 
             auto replaceStart = rewriteLoc->getLocWithOffset(
                 static_cast<int>(pos));
             return singleEdit(replaceStart,
-                              static_cast<unsigned>(rule.old_text.size()),
+                              static_cast<unsigned>(rule.from.size()),
                               std::string(suggestion));
         }
 
@@ -256,7 +256,7 @@ static void addTypeRules(std::vector<RewriteRule> &rules, Reporter &rep,
 // Macro-expanded arguments can produce multiple AST matches at the same source
 // offset. shared_ptr is needed because std::function (inside EditGenerator)
 // requires a copyable lambda.
-template <typename ShorthandTable>
+template <MappingRuleRange ShorthandTable>
 static llvm::Expected<SmallVector<Edit, 1>> rewriteEnumRef(
     const MatchFinder::MatchResult &R,
     Reporter &rep, bool rewrite,
@@ -295,23 +295,23 @@ static llvm::Expected<SmallVector<Edit, 1>> rewriteEnumRef(
     SourceLocation rewriteLoc = in_macro_arg ? spellingLoc : loc;
 
     for (const auto &rule : shorthands) {
-        if (text == rule.old_text) {
+        if (text == rule.from) {
             rep.addFinding(FindingKind::ScalarType, SM, spellingLoc,
-                           rule.old_text, rule.new_text);
+                           rule.from, rule.to);
             if (!rewrite)
                 return noEdits();
             return singleEdit(rewriteLoc,
-                              static_cast<unsigned>(rule.old_text.size()),
-                              std::string(rule.new_text));
+                              static_cast<unsigned>(rule.from.size()),
+                              std::string(rule.to));
         }
     }
 
     for (const auto &rule : kTypeRules) {
-        if (rule.old_text != typePrefix1 && rule.old_text != typePrefix2)
+        if (rule.from != typePrefix1 && rule.from != typePrefix2)
             continue;
-        if (text.starts_with(rule.old_text)) {
-            std::string newText = std::string(rule.new_text) +
-                                  text.substr(rule.old_text.size());
+        if (text.starts_with(rule.from)) {
+            std::string newText = std::string(rule.to) +
+                                  text.substr(rule.from.size());
             rep.addFinding(FindingKind::ScalarType, SM, spellingLoc,
                            text, newText);
             if (!rewrite)
@@ -325,7 +325,7 @@ static llvm::Expected<SmallVector<Edit, 1>> rewriteEnumRef(
     return noEdits();
 }
 
-template <typename ShorthandArray>
+template <MappingRuleRange ShorthandArray>
 static void addEnumShorthandRules(
     std::vector<RewriteRule> &rules, Reporter &rep, bool rewrite,
     const LocFilter &loc,
@@ -482,7 +482,7 @@ static void addMethodToFuncRules(std::vector<RewriteRule> &rules,
             return noEdits();
 
         for (const auto &rule : kMethodToFreeFuncRules) {
-            if (methodName != rule.method_name)
+            if (methodName != rule.from)
                 continue;
 
             auto objText = getSourceText(obj->getSourceRange(), SM, LO);
@@ -494,7 +494,7 @@ static void addMethodToFuncRules(std::vector<RewriteRule> &rules,
                 llvm::consumeError(argsRange.takeError());
 
             std::string replacement =
-                std::string(rule.free_func) + "(" + objText;
+                std::string(rule.to) + "(" + objText;
             if (!argsText.empty())
                 replacement += ", " + argsText;
             replacement += ")";
@@ -512,7 +512,7 @@ static void addMethodToFuncRules(std::vector<RewriteRule> &rules,
 
     std::vector<std::string> methodNames;
     for (const auto &rule : kMethodToFreeFuncRules)
-        methodNames.push_back(std::string(rule.method_name));
+        methodNames.push_back(std::string(rule.from));
 
     rules.push_back(makeRule(
         cxxMemberCallExpr(loc.stmt,
@@ -676,27 +676,27 @@ static void addMethodRenameRules(std::vector<RewriteRule> &rules,
 
         auto methodName = ME->getMemberDecl()->getNameAsString();
         for (const auto &rule : kMethodRenameRules) {
-            if (methodName != rule.old_name)
+            if (methodName != rule.from)
                 continue;
 
             auto memberLoc = in_macro_arg
                 ? SM.getSpellingLoc(ME->getMemberLoc())
                 : ME->getMemberLoc();
             rep.addFinding(FindingKind::MethodToFunc, SM, memberLoc,
-                           rule.old_name, rule.new_name);
+                           rule.from, rule.to);
             if (!rewrite)
                 return noEdits();
 
             return singleEdit(memberLoc,
-                              static_cast<unsigned>(rule.old_name.size()),
-                              std::string(rule.new_name));
+                              static_cast<unsigned>(rule.from.size()),
+                              std::string(rule.to));
         }
         return noEdits();
     };
 
     std::vector<std::string> renameNames;
     for (const auto &rule : kMethodRenameRules)
-        renameNames.push_back(std::string(rule.old_name));
+        renameNames.push_back(std::string(rule.from));
 
     rules.push_back(makeRule(
         cxxMemberCallExpr(loc.stmt,
@@ -809,18 +809,18 @@ static void addFreeFuncRules(std::vector<RewriteRule> &rules, Reporter &rep,
         auto writtenText = getSourceText(DRE->getSourceRange(), SM, LO);
 
         for (const auto &rule : kFreeFuncRules) {
-            if (canonicalName != rule.old_qualified &&
-                writtenText != rule.old_qualified)
+            if (canonicalName != rule.from &&
+                writtenText != rule.from)
                 continue;
 
-            auto oldFunc = rule.old_qualified.substr(
-                rule.old_qualified.rfind(':') + 1);
-            auto newFunc = rule.new_qualified.substr(
-                rule.new_qualified.rfind(':') + 1);
+            auto oldFunc = rule.from.substr(
+                rule.from.rfind(':') + 1);
+            auto newFunc = rule.to.substr(
+                rule.to.rfind(':') + 1);
             bool name_changes = (oldFunc != newFunc);
 
             if (name_changes) {
-                std::string suggestion = std::string(rule.new_qualified) +
+                std::string suggestion = std::string(rule.to) +
                     " (function name changes — adjust arguments manually)";
                 rep.addFinding(FindingKind::FreeFunc, SM, CE->getBeginLoc(),
                                writtenText, suggestion, true);
@@ -828,19 +828,19 @@ static void addFreeFuncRules(std::vector<RewriteRule> &rules, Reporter &rep,
             }
 
             rep.addFinding(FindingKind::FreeFunc, SM, CE->getBeginLoc(),
-                           writtenText, rule.new_qualified);
+                           writtenText, rule.to);
             if (!rewrite)
                 return noEdits();
 
             return singleEdit(DRE->getSourceRange(),
-                              std::string(rule.new_qualified));
+                              std::string(rule.to));
         }
         return noEdits();
     };
 
     std::vector<std::string> funcNames;
     for (const auto &rule : kFreeFuncRules)
-        funcNames.push_back(std::string(rule.old_qualified));
+        funcNames.push_back(std::string(rule.from));
 
     rules.push_back(makeRule(
         callExpr(loc.stmt,
