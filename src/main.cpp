@@ -154,7 +154,7 @@ static int runVerify(const std::vector<std::string> &sources,
         }
     }
 
-    int total_violations = 0;
+    size_t total_violations = 0;
     for (const auto &src : sources) {
         auto violations = use_compile
             ? stable_abi::verifyStableAbi(src, opts)
@@ -163,7 +163,7 @@ static int runVerify(const std::vector<std::string> &sources,
             stable_abi::printViolationsJson(violations);
         else
             stable_abi::printViolations(violations);
-        total_violations += static_cast<int>(violations.size());
+        total_violations += violations.size();
     }
     return total_violations > 0 ? 1 : 0;
 }
@@ -323,9 +323,14 @@ static int runWithConfig(stable_abi::Config &cfg,
             return AdjustedArgs;
         });
 
-    bool dryRun = DryRun.getValue();
+    stable_abi::ActionOptions actionOpts{
+        .rewrite = rewrite,
+        .json = json,
+        .dry_run = DryRun.getValue(),
+        .project_root = projectRoot,
+    };
     auto Factory = std::make_unique<stable_abi::StableAbiActionFactory>(
-        rewrite, json, projectRoot, dryRun);
+        actionOpts);
 
     stable_abi::ParseDiagConsumer diagConsumer(Factory->getReporter());
     Tool.setDiagnosticConsumer(&diagConsumer);
@@ -342,7 +347,7 @@ static int runWithConfig(stable_abi::Config &cfg,
     }
     reporter.printParseWarnings();
 
-    if (rewrite && !dryRun && result == 0) {
+    if (rewrite && !actionOpts.dry_run && result == 0) {
         if (!json)
             llvm::outs() << "\n--- Post-rewrite ABI verification ---\n";
         int verify_result = runVerify(sources, resourceDir, cfg.pytorch_root,
@@ -357,7 +362,7 @@ static int runWithConfig(stable_abi::Config &cfg,
     }
 
     if (result == 0) {
-        if (rewrite && !dryRun) {
+        if (rewrite && !actionOpts.dry_run) {
             if (reporter.flagCount() > 0)
                 result = 1;
         } else {

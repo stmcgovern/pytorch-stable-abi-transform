@@ -11,10 +11,17 @@
 
 namespace stable_abi {
 
+struct ActionOptions {
+    bool rewrite = false;
+    bool json = false;
+    bool dry_run = false;
+    std::string project_root;
+};
+
 class StableAbiConsumer : public clang::ASTConsumer {
 public:
     StableAbiConsumer(FileReplacements &fileRepls, Reporter &rep,
-                      bool rewrite, const std::string &projectRoot,
+                      const ActionOptions &opts,
                       PreprocessorCallbacks *ppCallbacks = nullptr);
     void HandleTranslationUnit(clang::ASTContext &Context) override;
 
@@ -31,10 +38,8 @@ private:
 
 class StableAbiFrontendAction : public clang::ASTFrontendAction {
 public:
-    StableAbiFrontendAction(Reporter &reporter, bool rewrite, bool json,
-                            const std::string &projectRoot, bool dry_run = false)
-        : reporter_(reporter), rewrite_mode_(rewrite), json_mode_(json),
-          project_root_(projectRoot), dry_run_(dry_run) {}
+    StableAbiFrontendAction(Reporter &reporter, const ActionOptions &opts)
+        : reporter_(reporter), opts_(opts) {}
 
     std::unique_ptr<clang::ASTConsumer>
     CreateASTConsumer(clang::CompilerInstance &CI,
@@ -45,33 +50,23 @@ private:
     clang::Rewriter rewriter_;
     Reporter &reporter_;
     FileReplacements file_repls_;
-    bool rewrite_mode_;
-    bool json_mode_;
-    std::string project_root_;
-    bool dry_run_;
+    ActionOptions opts_;
 };
 
 class StableAbiActionFactory
     : public clang::tooling::FrontendActionFactory {
 public:
-    StableAbiActionFactory(bool rewrite, bool json,
-                           const std::string &projectRoot = "",
-                           bool dry_run = false)
-        : rewrite_mode_(rewrite), json_mode_(json),
-          project_root_(projectRoot), dry_run_(dry_run) {}
+    explicit StableAbiActionFactory(const ActionOptions &opts)
+        : opts_(opts) {}
 
     std::unique_ptr<clang::FrontendAction> create() override {
-        return std::make_unique<StableAbiFrontendAction>(
-            reporter_, rewrite_mode_, json_mode_, project_root_, dry_run_);
+        return std::make_unique<StableAbiFrontendAction>(reporter_, opts_);
     }
 
     Reporter &getReporter() { return reporter_; }
 
 private:
-    bool rewrite_mode_;
-    bool json_mode_;
-    std::string project_root_;
-    bool dry_run_;
+    ActionOptions opts_;
     Reporter reporter_;
 };
 

@@ -1,4 +1,5 @@
 #include "Verifier.h"
+#include "Helpers.h"
 #include <clang/Frontend/FrontendActions.h>
 #include <clang/Tooling/CompilationDatabase.h>
 #include <clang/Tooling/Tooling.h>
@@ -144,6 +145,10 @@ std::vector<Violation> verifyStableAbi(const std::string &filepath,
     std::vector<Violation> violations;
 
     ShadowIncludeTree shadow(opts.pytorch_root);
+    if (shadow.path().empty()) {
+        violations.push_back({filepath, 0, 0, "", "failed to create shadow include tree"});
+        return violations;
+    }
 
     std::vector<std::string> args;
     args.push_back("-std=c++20");
@@ -369,22 +374,6 @@ void printViolations(const std::vector<Violation> &violations) {
         llvm::outs() << "  " << v.text << "\n"
                       << "             " << v.reason << "\n";
     }
-}
-
-static std::string jsonEscape(const std::string &s) {
-    std::string out;
-    out.reserve(s.size());
-    for (char c : s) {
-        switch (c) {
-        case '"': out += "\\\""; break;
-        case '\\': out += "\\\\"; break;
-        case '\n': out += "\\n"; break;
-        case '\r': out += "\\r"; break;
-        case '\t': out += "\\t"; break;
-        default: out += c;
-        }
-    }
-    return out;
 }
 
 void printViolationsJson(const std::vector<Violation> &violations) {

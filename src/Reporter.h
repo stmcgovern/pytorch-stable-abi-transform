@@ -49,13 +49,13 @@ public:
 
     void suppressRedundantFlags();
 
-    size_t rewriteCount() const { return rewrite_count_; }
-    size_t flagCount() const { return flag_count_; }
+    [[nodiscard]] size_t rewriteCount() const { return rewrite_count_; }
+    [[nodiscard]] size_t flagCount() const { return flag_count_; }
 
-    bool hasNonIncludeFindingsForFile(std::string_view filename) const;
+    [[nodiscard]] bool hasNonIncludeFindingsForFile(std::string_view filename) const;
 
     void recordParseError(const std::string &file);
-    size_t parseErrorCount() const { return parse_error_count_; }
+    [[nodiscard]] size_t parseErrorCount() const { return parse_error_count_; }
     void printParseWarnings() const;
 
 private:
@@ -66,7 +66,7 @@ private:
     size_t parse_error_count_ = 0;
     std::map<std::string, size_t> parse_errors_by_file_;
 
-    static const char *kindLabel(FindingKind kind);
+    static std::string_view kindLabel(FindingKind kind);
 };
 
 } // namespace stable_abi

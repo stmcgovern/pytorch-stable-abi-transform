@@ -1,4 +1,5 @@
 #include "Reporter.h"
+#include "Helpers.h"
 #include <llvm/Support/raw_ostream.h>
 
 namespace stable_abi {
@@ -51,22 +52,6 @@ void Reporter::printReport() const {
 void Reporter::printSummary() const {
     llvm::outs() << "\nSummary: " << rewrite_count_ << " auto-rewritable, "
                  << flag_count_ << " flagged for manual review\n";
-}
-
-static std::string jsonEscape(const std::string &s) {
-    std::string out;
-    out.reserve(s.size());
-    for (char c : s) {
-        switch (c) {
-        case '"': out += "\\\""; break;
-        case '\\': out += "\\\\"; break;
-        case '\n': out += "\\n"; break;
-        case '\r': out += "\\r"; break;
-        case '\t': out += "\\t"; break;
-        default: out += c;
-        }
-    }
-    return out;
 }
 
 void Reporter::printJson() const {
@@ -135,7 +120,7 @@ bool Reporter::hasNonIncludeFindingsForFile(std::string_view filename) const {
     return false;
 }
 
-const char *Reporter::kindLabel(FindingKind kind) {
+std::string_view Reporter::kindLabel(FindingKind kind) {
     switch (kind) {
     case FindingKind::Include:
         return "INCL ";

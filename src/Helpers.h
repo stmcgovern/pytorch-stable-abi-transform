@@ -42,7 +42,7 @@ inline std::string getIndent(clang::SourceLocation loc,
     return indent;
 }
 
-inline bool isInProjectScope(const clang::SourceManager &SM,
+[[nodiscard]] inline bool isInProjectScope(const clang::SourceManager &SM,
                              clang::SourceLocation Loc,
                              llvm::StringRef projectRoot) {
     if (projectRoot.empty())
@@ -60,8 +60,11 @@ inline void addReplacement(FileReplacements &fileRepls,
                            llvm::StringRef text) {
     clang::tooling::Replacement R(SM, loc, len, text);
     auto &repls = fileRepls[R.getFilePath().str()];
-    if (auto err = repls.add(R))
-        llvm::consumeError(std::move(err));
+    if (auto err = repls.add(R)) {
+        llvm::errs() << "warning: conflicting replacement at "
+                     << R.getFilePath() << ":" << R.getOffset()
+                     << " -- " << llvm::toString(std::move(err)) << "\n";
+    }
 }
 
 inline void addReplacement(FileReplacements &fileRepls,
@@ -70,11 +73,14 @@ inline void addReplacement(FileReplacements &fileRepls,
                            const clang::LangOptions &LO) {
     clang::tooling::Replacement R(SM, range, text, LO);
     auto &repls = fileRepls[R.getFilePath().str()];
-    if (auto err = repls.add(R))
-        llvm::consumeError(std::move(err));
+    if (auto err = repls.add(R)) {
+        llvm::errs() << "warning: conflicting replacement at "
+                     << R.getFilePath() << ":" << R.getOffset()
+                     << " -- " << llvm::toString(std::move(err)) << "\n";
+    }
 }
 
-inline bool isTensorType(const clang::Expr *obj) {
+[[nodiscard]] inline bool isTensorType(const clang::Expr *obj) {
     if (!obj)
         return false;
     auto objType =
@@ -88,6 +94,22 @@ inline bool isTensorType(const clang::Expr *obj) {
     return qualified == "at::Tensor" || qualified == "at::TensorBase" ||
            qualified == "torch::Tensor" || qualified == "c10::TensorImpl" ||
            qualified == "torch::stable::Tensor";
+}
+
+inline std::string jsonEscape(std::string_view s) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        switch (c) {
+        case '"': out += "\\\""; break;
+        case '\\': out += "\\\\"; break;
+        case '\n': out += "\\n"; break;
+        case '\r': out += "\\r"; break;
+        case '\t': out += "\\t"; break;
+        default: out += c;
+        }
+    }
+    return out;
 }
 
 } // namespace stable_abi

@@ -8,12 +8,12 @@
 namespace stable_abi {
 
 StableAbiConsumer::StableAbiConsumer(FileReplacements &fileRepls,
-                                     Reporter &rep, bool rewrite,
-                                     const std::string &projectRoot,
+                                     Reporter &rep,
+                                     const ActionOptions &opts,
                                      PreprocessorCallbacks *ppCallbacks)
-    : file_repls_(fileRepls), rewrite_mode_(rewrite), pp_callbacks_(ppCallbacks),
+    : file_repls_(fileRepls), rewrite_mode_(opts.rewrite), pp_callbacks_(ppCallbacks),
       transformer_(
-          buildTransformerRules(rep, rewrite, projectRoot),
+          buildTransformerRules(rep, opts.rewrite, opts.project_root),
           [this](llvm::Expected<llvm::MutableArrayRef<
                      clang::tooling::AtomicChange>> C) {
               if (C) {
@@ -23,8 +23,8 @@ StableAbiConsumer::StableAbiConsumer(FileReplacements &fileRepls,
                   llvm::consumeError(C.takeError());
               }
           }),
-      guardCallback_(fileRepls, rep, rewrite, projectRoot),
-      streamCallback_(fileRepls, rep, rewrite, guardCallback_, projectRoot) {
+      guardCallback_(fileRepls, rep, opts.rewrite, opts.project_root),
+      streamCallback_(fileRepls, rep, opts.rewrite, guardCallback_, opts.project_root) {
     transformer_.registerMatchers(&finder_);
     registerManualMatchers(finder_, streamCallback_, guardCallback_);
 }
@@ -40,7 +40,8 @@ void StableAbiConsumer::HandleTranslationUnit(clang::ASTContext &Context) {
             for (const auto &r : change.getReplacements()) {
                 auto &repls = file_repls_[r.getFilePath().str()];
                 if (auto err = repls.add(r))
-                    llvm::consumeError(std::move(err));
+                    llvm::errs() << "warning: conflicting replacement -- "
+                                 << llvm::toString(std::move(err)) << "\n";
             }
         }
     }
@@ -53,13 +54,12 @@ StableAbiFrontendAction::CreateASTConsumer(clang::CompilerInstance &CI,
 
     auto ppCallbacks = std::make_unique<PreprocessorCallbacks>(
         file_repls_, reporter_, CI.getSourceManager(), CI.getLangOpts(),
-        rewrite_mode_, project_root_);
+        opts_.rewrite, opts_.project_root);
     auto *ppRaw = ppCallbacks.get();
     CI.getPreprocessor().addPPCallbacks(std::move(ppCallbacks));
 
     return std::make_unique<StableAbiConsumer>(file_repls_, reporter_,
-                                               rewrite_mode_, project_root_,
-                                               ppRaw);
+                                               opts_, ppRaw);
 }
 
 static void printUnifiedDiff(const std::string &filename,
@@ -92,7 +92,7 @@ static void printUnifiedDiff(const std::string &filename,
             break;
 
         // Context: up to 3 lines before
-        size_t ctx = std::min(i - hunkStart_i, (size_t)3);
+        size_t ctx = std::min(i - hunkStart_i, size_t{3});
         size_t ctxStart_i = i - ctx, ctxStart_j = j - ctx;
 
         // Find end of different region
@@ -145,11 +145,13 @@ static void printUnifiedDiff(const std::string &filename,
 }
 
 void StableAbiFrontendAction::EndSourceFileAction() {
-    if (rewrite_mode_) {
+    if (opts_.rewrite) {
         for (auto &[filename, repls] : file_repls_) {
-            clang::tooling::applyAllReplacements(repls, rewriter_);
+            if (!clang::tooling::applyAllReplacements(repls, rewriter_))
+                llvm::errs() << "warning: failed to apply replacements to "
+                             << filename << "\n";
         }
-        if (dry_run_) {
+        if (opts_.dry_run) {
             auto &SM = rewriter_.getSourceMgr();
             for (auto it = rewriter_.buffer_begin();
                  it != rewriter_.buffer_end(); ++it) {
