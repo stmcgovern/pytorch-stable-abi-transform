@@ -89,7 +89,7 @@ void PreprocessorCallbacks::finalizeIncludes() {
         std::string replacement;
         for (const auto &new_path : rule.new_paths) {
             if (new_path.empty())
-                continue;
+                break;
             if (emitted_includes_.count(std::string(new_path)))
                 continue;
             emitted_includes_.insert(std::string(new_path));

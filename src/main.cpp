@@ -182,19 +182,21 @@ static std::vector<std::string> discoverSources(llvm::StringRef root) {
     return result;
 }
 
-static bool tryLoadConfig(stable_abi::Config &cfg, std::string &error) {
+enum class ConfigResult { NotFound, Loaded, Error };
+
+static ConfigResult tryLoadConfig(stable_abi::Config &cfg, std::string &error) {
     std::string configPath = ConfigFile.getValue();
     if (configPath.empty()) {
         if (llvm::sys::fs::exists(".stable-abi.yaml"))
             configPath = ".stable-abi.yaml";
         else
-            return false;
+            return ConfigResult::NotFound;
     }
 
     if (!stable_abi::loadConfig(configPath, cfg, error))
-        return false;
+        return ConfigResult::Error;
     llvm::errs() << "note: loaded config from " << configPath << "\n";
-    return true;
+    return ConfigResult::Loaded;
 }
 
 static bool applyCliOverrides(stable_abi::Config &cfg) {
@@ -325,7 +327,6 @@ static int runWithConfig(stable_abi::Config &cfg,
 
     stable_abi::ActionOptions actionOpts{
         .rewrite = rewrite,
-        .json = json,
         .dry_run = DryRun.getValue(),
         .project_root = projectRoot,
     };
@@ -393,15 +394,15 @@ int main(int argc, const char **argv) {
 
     stable_abi::Config cfg;
     std::string configError;
-    bool hasConfig = tryLoadConfig(cfg, configError);
-    if (!configError.empty()) {
+    auto configResult = tryLoadConfig(cfg, configError);
+    if (configResult == ConfigResult::Error) {
         llvm::errs() << "error: " << configError << "\n";
         return 1;
     }
 
     clang::tooling::CommonOptionsParser &OptionsParser = ExpectedParser.get();
 
-    if (hasConfig) {
+    if (configResult == ConfigResult::Loaded) {
         if (!applyCliOverrides(cfg))
             return 1;
         auto &cliSources = OptionsParser.getSourcePathList();

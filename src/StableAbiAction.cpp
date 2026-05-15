@@ -11,9 +11,9 @@ StableAbiConsumer::StableAbiConsumer(FileReplacements &fileRepls,
                                      Reporter &rep,
                                      const ActionOptions &opts,
                                      PreprocessorCallbacks *ppCallbacks)
-    : file_repls_(fileRepls), rewrite_mode_(opts.rewrite), pp_callbacks_(ppCallbacks),
+    : file_repls_(fileRepls), opts_(opts), pp_callbacks_(ppCallbacks),
       transformer_(
-          buildTransformerRules(rep, opts.rewrite, opts.project_root),
+          buildTransformerRules(rep, opts_.rewrite, opts_.project_root),
           [this](llvm::Expected<llvm::MutableArrayRef<
                      clang::tooling::AtomicChange>> C) {
               if (C) {
@@ -23,8 +23,8 @@ StableAbiConsumer::StableAbiConsumer(FileReplacements &fileRepls,
                   llvm::consumeError(C.takeError());
               }
           }),
-      guardCallback_(fileRepls, rep, opts.rewrite, opts.project_root),
-      streamCallback_(fileRepls, rep, opts.rewrite, guardCallback_, opts.project_root) {
+      guardCallback_(fileRepls, rep, opts_.rewrite, opts_.project_root),
+      streamCallback_(fileRepls, rep, opts_.rewrite, guardCallback_, opts_.project_root) {
     transformer_.registerMatchers(&finder_);
     registerManualMatchers(finder_, streamCallback_, guardCallback_);
 }
@@ -35,7 +35,7 @@ void StableAbiConsumer::HandleTranslationUnit(clang::ASTContext &Context) {
     if (pp_callbacks_)
         pp_callbacks_->finalizeIncludes();
 
-    if (rewrite_mode_) {
+    if (opts_.rewrite) {
         for (const auto &change : changes_) {
             for (const auto &r : change.getReplacements()) {
                 auto &repls = file_repls_[r.getFilePath().str()];

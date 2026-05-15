@@ -13,7 +13,6 @@ namespace stable_abi {
 
 struct ActionOptions {
     bool rewrite = false;
-    bool json = false;
     bool dry_run = false;
     std::string project_root;
 };
@@ -27,7 +26,7 @@ public:
 
 private:
     FileReplacements &file_repls_;
-    bool rewrite_mode_;
+    ActionOptions opts_;
     PreprocessorCallbacks *pp_callbacks_;
     std::vector<clang::tooling::AtomicChange> changes_;
     clang::ast_matchers::MatchFinder finder_;

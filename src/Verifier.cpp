@@ -198,7 +198,7 @@ std::vector<Violation> verifyStableAbi(const std::string &filepath,
 
 struct ForbiddenPattern {
     std::regex pattern;
-    const char *reason;
+    std::string_view reason;
 };
 
 static const std::vector<ForbiddenPattern> &getForbiddenPatterns() {
@@ -347,7 +347,7 @@ std::vector<Violation> verifyStableAbiRegex(const std::string &filepath) {
             std::smatch match;
             if (std::regex_search(code, match, fp.pattern)) {
                 violations.push_back(
-                    {filepath, lineNo, 0, match[0].str(), fp.reason});
+                    {filepath, lineNo, 0, match[0].str(), std::string(fp.reason)});
             }
         }
     }
