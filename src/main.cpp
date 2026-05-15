@@ -68,6 +68,14 @@ static llvm::cl::opt<bool>
            llvm::cl::desc("Show unified diff of what --mode=rewrite would change, without modifying files"),
            llvm::cl::init(false), llvm::cl::cat(ToolCategory));
 
+static std::string detectResourceDir() {
+    llvm::SmallString<256> path(LLVM_INSTALL_PREFIX);
+    llvm::sys::path::append(path, "lib", "clang", CLANG_VERSION_MAJOR_STR);
+    if (llvm::sys::fs::is_directory(path))
+        return std::string(path);
+    return "";
+}
+
 static std::string detectCudaInclude() {
     static constexpr std::array candidates = {
         std::string_view{"/usr/local/cuda/include"},
@@ -193,20 +201,15 @@ static bool validateSources(const std::vector<std::string> &sources) {
     return !missing;
 }
 
-static int runWithConfig(stable_abi::Config &cfg) {
+static int runWithConfig(stable_abi::Config &cfg,
+                         clang::tooling::CompilationDatabase *externalDB = nullptr) {
     if (cfg.mode != "audit" && cfg.mode != "rewrite" && cfg.mode != "verify") {
         llvm::errs() << "error: unknown mode '" << cfg.mode
                      << "'. Must be one of: audit, rewrite, verify\n";
         return 1;
     }
 
-    std::string resourceDir;
-    {
-        llvm::SmallString<256> path(LLVM_INSTALL_PREFIX);
-        llvm::sys::path::append(path, "lib", "clang", CLANG_VERSION_MAJOR_STR);
-        if (llvm::sys::fs::is_directory(path))
-            resourceDir = std::string(path);
-    }
+    auto resourceDir = detectResourceDir();
 
     bool json = (cfg.format == "json");
 
@@ -250,15 +253,19 @@ static int runWithConfig(stable_abi::Config &cfg) {
 
     bool rewrite = (cfg.mode == "rewrite");
 
-    std::vector<std::string> clangArgs;
-    for (const auto &flag : cfg.compiler_flags)
-        clangArgs.push_back(flag);
-    for (const auto &inc : cfg.include_paths) {
-        clangArgs.push_back("-I" + inc);
+    std::unique_ptr<clang::tooling::FixedCompilationDatabase> ownedDB;
+    clang::tooling::CompilationDatabase *db = externalDB;
+    if (!db) {
+        std::vector<std::string> clangArgs;
+        for (const auto &flag : cfg.compiler_flags)
+            clangArgs.push_back(flag);
+        for (const auto &inc : cfg.include_paths)
+            clangArgs.push_back("-I" + inc);
+        ownedDB = std::make_unique<clang::tooling::FixedCompilationDatabase>(
+            ".", clangArgs);
+        db = ownedDB.get();
     }
-
-    clang::tooling::FixedCompilationDatabase compDB(".", clangArgs);
-    clang::tooling::ClangTool Tool(compDB, sources);
+    clang::tooling::ClangTool Tool(*db, sources);
 
     Tool.appendArgumentsAdjuster(
         [&resourceDir](const clang::tooling::CommandLineArguments &Args,
@@ -356,16 +363,9 @@ int main(int argc, const char **argv) {
     }
 
     // Legacy CLI path — no config file
-    auto mode = Mode.getValue();
-    if (mode != "audit" && mode != "rewrite" && mode != "verify") {
-        llvm::errs() << "error: unknown mode '" << mode
-                     << "'. Must be one of: audit, rewrite, verify\n";
-        return 1;
-    }
+    auto &cliSources = OptionsParser.getSourcePathList();
 
-    std::vector<std::string> sources = OptionsParser.getSourcePathList();
-
-    if (sources.empty() && ProjectRoot.getValue().empty()) {
+    if (cliSources.empty() && ProjectRoot.getValue().empty()) {
         llvm::errs() << "stable-abi-transform: no input files\n\n"
                      << "Usage:\n"
                      << "  stable-abi-transform [options] <source files> -- "
@@ -383,122 +383,13 @@ int main(int argc, const char **argv) {
         return 1;
     }
 
-    bool json = (Format.getValue() == "json");
-
-    std::string resourceDir;
-    {
-        llvm::SmallString<256> path(LLVM_INSTALL_PREFIX);
-        llvm::sys::path::append(path, "lib", "clang", CLANG_VERSION_MAJOR_STR);
-        if (llvm::sys::fs::is_directory(path))
-            resourceDir = std::string(path);
-    }
-
-    if (Mode.getValue() == "verify") {
-        if (!validateSources(sources))
-            return 1;
-        auto extraIncs = std::vector<std::string>(ExtraIncludes.begin(),
-                                                   ExtraIncludes.end());
-        return runVerify(sources, resourceDir, PytorchRoot.getValue(),
-                         extraIncs, CudaInclude.getValue(),
-                         VerifyMethod.getValue(), json);
-    }
-
-    bool rewrite = (Mode.getValue() == "rewrite");
-
-    std::string projectRoot = ProjectRoot.getValue();
-    if (!projectRoot.empty()) {
-        llvm::SmallString<256> abs(projectRoot);
-        llvm::sys::fs::make_absolute(abs);
-        projectRoot = std::string(abs);
-    }
-
-    if (sources.empty() && !projectRoot.empty()) {
-        if (!llvm::sys::fs::is_directory(projectRoot)) {
-            llvm::errs() << "error: project root is not a directory: "
-                         << projectRoot << "\n";
-            return 1;
-        }
-        sources = discoverSources(projectRoot);
-        if (sources.empty()) {
-            llvm::errs() << "error: no .cpp/.cu/.cuh files found under "
-                         << projectRoot << "\n";
-            return 1;
-        }
-        llvm::errs() << "note: auto-discovered " << sources.size()
-                     << " source files under " << projectRoot << "\n";
-    }
-
-    if (sources.empty()) {
-        llvm::errs() << "error: no source files specified\n";
-        return 1;
-    }
-
-    if (!validateSources(sources))
-        return 1;
-
-    clang::tooling::ClangTool Tool(OptionsParser.getCompilations(), sources);
-
-    Tool.appendArgumentsAdjuster(
-        [&resourceDir](const clang::tooling::CommandLineArguments &Args,
-                        llvm::StringRef Filename) {
-            clang::tooling::CommandLineArguments AdjustedArgs = Args;
-            if (Filename.ends_with(".cu") || Filename.ends_with(".cuh")) {
-                AdjustedArgs.push_back("--cuda-host-only");
-            }
-            if (!resourceDir.empty()) {
-                AdjustedArgs.push_back("-resource-dir");
-                AdjustedArgs.push_back(resourceDir);
-            }
-            return AdjustedArgs;
-        });
-
-    bool dryRunLegacy = DryRun.getValue();
-    auto Factory = std::make_unique<stable_abi::StableAbiActionFactory>(
-        rewrite, json, projectRoot, dryRunLegacy);
-
-    stable_abi::ParseDiagConsumer diagConsumerLegacy(Factory->getReporter());
-    Tool.setDiagnosticConsumer(&diagConsumerLegacy);
-
-    int result = Tool.run(Factory.get());
-
-    auto &reporter = Factory->getReporter();
-    reporter.suppressRedundantFlags();
-    if (json) {
-        reporter.printJson();
-    } else {
-        reporter.printReport();
-        reporter.printSummary();
-    }
-    reporter.printParseWarnings();
-
-    if (rewrite && !dryRunLegacy && result == 0) {
-        if (!json)
-            llvm::outs() << "\n--- Post-rewrite ABI verification ---\n";
-        auto extraIncsPost = std::vector<std::string>(ExtraIncludes.begin(),
-                                                       ExtraIncludes.end());
-        int verify_result = runVerify(sources, resourceDir,
-                                      PytorchRoot.getValue(),
-                                      extraIncsPost,
-                                      CudaInclude.getValue(),
-                                      VerifyMethod.getValue(),
-                                      json, true);
-        if (verify_result > 0) {
-            if (!json)
-                llvm::outs() << "\nUnstable API references remain. "
-                                "Manual review needed for flagged items.\n";
-            result = 1;
-        }
-    }
-
-    if (result == 0) {
-        if (rewrite && !dryRunLegacy) {
-            if (reporter.flagCount() > 0)
-                result = 1;
-        } else {
-            if (reporter.rewriteCount() > 0 || reporter.flagCount() > 0)
-                result = 1;
-        }
-    }
-
-    return result;
+    cfg.mode = Mode.getValue();
+    cfg.format = Format.getValue();
+    cfg.pytorch_root = PytorchRoot.getValue();
+    cfg.project_root = ProjectRoot.getValue();
+    cfg.verify_method = VerifyMethod.getValue();
+    cfg.cuda_include = CudaInclude.getValue();
+    cfg.extra_includes = {ExtraIncludes.begin(), ExtraIncludes.end()};
+    cfg.sources = cliSources;
+    return runWithConfig(cfg, &OptionsParser.getCompilations());
 }
