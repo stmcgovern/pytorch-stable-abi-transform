@@ -140,7 +140,7 @@ static std::vector<std::string> discoverSources(llvm::StringRef root) {
     return result;
 }
 
-static bool tryLoadConfig(stable_abi::Config &cfg) {
+static bool tryLoadConfig(stable_abi::Config &cfg, std::string &error) {
     std::string configPath = ConfigFile.getValue();
     if (configPath.empty()) {
         if (llvm::sys::fs::exists(".stable-abi.yaml"))
@@ -149,12 +149,9 @@ static bool tryLoadConfig(stable_abi::Config &cfg) {
             return false;
     }
 
-    std::string error;
-    if (!stable_abi::loadConfig(configPath, cfg, error)) {
-        llvm::errs() << "error: " << error << "\n";
-        std::exit(1);
-    }
-    llvm::errs() << "Loaded config from " << configPath << "\n";
+    if (!stable_abi::loadConfig(configPath, cfg, error))
+        return false;
+    llvm::errs() << "note: loaded config from " << configPath << "\n";
     return true;
 }
 
@@ -215,13 +212,18 @@ static int runWithConfig(stable_abi::Config &cfg) {
 
     std::vector<std::string> sources = cfg.sources;
     if (sources.empty() && !projectRoot.empty()) {
+        if (!llvm::sys::fs::is_directory(projectRoot)) {
+            llvm::errs() << "error: project root is not a directory: "
+                         << projectRoot << "\n";
+            return 1;
+        }
         sources = discoverSources(projectRoot);
         if (sources.empty()) {
             llvm::errs() << "error: no .cpp/.cu/.cuh files found under "
                          << projectRoot << "\n";
             return 1;
         }
-        llvm::errs() << "Auto-discovered " << sources.size()
+        llvm::errs() << "note: auto-discovered " << sources.size()
                      << " source files under " << projectRoot << "\n";
     }
 
@@ -229,6 +231,16 @@ static int runWithConfig(stable_abi::Config &cfg) {
         llvm::errs() << "error: no source files specified\n";
         return 1;
     }
+
+    bool missing = false;
+    for (const auto &src : sources) {
+        if (!llvm::sys::fs::exists(src)) {
+            llvm::errs() << "error: source file not found: " << src << "\n";
+            missing = true;
+        }
+    }
+    if (missing)
+        return 1;
 
     std::vector<std::string> clangArgs;
     for (const auto &flag : cfg.compiler_flags)
@@ -292,6 +304,16 @@ static int runWithConfig(stable_abi::Config &cfg) {
         }
     }
 
+    if (result == 0) {
+        if (rewrite && !dryRun) {
+            if (reporter.flagCount() > 0)
+                result = 1;
+        } else {
+            if (reporter.rewriteCount() > 0 || reporter.flagCount() > 0)
+                result = 1;
+        }
+    }
+
     return result;
 }
 
@@ -313,8 +335,20 @@ int main(int argc, const char **argv) {
     }
 
     stable_abi::Config cfg;
-    if (tryLoadConfig(cfg)) {
+    std::string configError;
+    bool hasConfig = tryLoadConfig(cfg, configError);
+    if (!configError.empty()) {
+        llvm::errs() << "error: " << configError << "\n";
+        return 1;
+    }
+
+    clang::tooling::CommonOptionsParser &OptionsParser = ExpectedParser.get();
+
+    if (hasConfig) {
         applyCliOverrides(cfg);
+        auto &cliSources = OptionsParser.getSourcePathList();
+        if (!cliSources.empty())
+            cfg.sources = cliSources;
         return runWithConfig(cfg);
     }
 
@@ -326,7 +360,6 @@ int main(int argc, const char **argv) {
         return 1;
     }
 
-    clang::tooling::CommonOptionsParser &OptionsParser = ExpectedParser.get();
     std::vector<std::string> sources = OptionsParser.getSourcePathList();
 
     if (sources.empty() && ProjectRoot.getValue().empty()) {
@@ -371,13 +404,18 @@ int main(int argc, const char **argv) {
     }
 
     if (sources.empty() && !projectRoot.empty()) {
+        if (!llvm::sys::fs::is_directory(projectRoot)) {
+            llvm::errs() << "error: project root is not a directory: "
+                         << projectRoot << "\n";
+            return 1;
+        }
         sources = discoverSources(projectRoot);
         if (sources.empty()) {
             llvm::errs() << "error: no .cpp/.cu/.cuh files found under "
                          << projectRoot << "\n";
             return 1;
         }
-        llvm::errs() << "Auto-discovered " << sources.size()
+        llvm::errs() << "note: auto-discovered " << sources.size()
                      << " source files under " << projectRoot << "\n";
     }
 
@@ -385,6 +423,16 @@ int main(int argc, const char **argv) {
         llvm::errs() << "error: no source files specified\n";
         return 1;
     }
+
+    bool missingLegacy = false;
+    for (const auto &src : sources) {
+        if (!llvm::sys::fs::exists(src)) {
+            llvm::errs() << "error: source file not found: " << src << "\n";
+            missingLegacy = true;
+        }
+    }
+    if (missingLegacy)
+        return 1;
 
     clang::tooling::ClangTool Tool(OptionsParser.getCompilations(), sources);
 
@@ -430,6 +478,16 @@ int main(int argc, const char **argv) {
                 llvm::outs() << "\nUnstable API references remain. "
                                 "Manual review needed for flagged items.\n";
             result = 1;
+        }
+    }
+
+    if (result == 0) {
+        if (rewrite && !dryRunLegacy) {
+            if (reporter.flagCount() > 0)
+                result = 1;
+        } else {
+            if (reporter.rewriteCount() > 0 || reporter.flagCount() > 0)
+                result = 1;
         }
     }
 

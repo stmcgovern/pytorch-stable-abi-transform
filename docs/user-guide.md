@@ -155,11 +155,27 @@ Pattern-matches against known unstable namespaces. Faster but less precise — u
 ## CI integration
 
 ```bash
-# Exit code: 0 = clean, 1 = unstable API detected
+# Exit codes:
+#   audit/dry-run: 0 = no unstable API found, 1 = findings exist
+#   rewrite:       0 = all auto-fixed, 1 = flagged items remain
+#   verify:        0 = stable ABI only, 1 = unstable API detected
+
 stable-abi-transform --mode=audit --format=json src/*.cu -- [flags]
 
 # Or verify already-migrated files
 stable-abi-transform --mode=verify --pytorch-root=$PYTORCH src/*.cu -- -std=c++20
+```
+
+### Using a config file with CLI overrides
+
+When `.stable-abi.yaml` exists, the tool auto-loads it. You can still override which files to process on the command line:
+
+```bash
+# Process a specific file using config's compiler settings
+stable-abi-transform src/my_kernel.cu
+
+# Config controls compiler_flags and include_paths;
+# -- flags on the CLI are ignored in config mode
 ```
 
 ## Regenerating rules
