@@ -54,6 +54,26 @@ inline bool isInProjectScope(const clang::SourceManager &SM,
     return filename.starts_with(projectRoot);
 }
 
+inline void addReplacement(FileReplacements &fileRepls,
+                           const clang::SourceManager &SM,
+                           clang::SourceLocation loc, unsigned len,
+                           llvm::StringRef text) {
+    clang::tooling::Replacement R(SM, loc, len, text);
+    auto &repls = fileRepls[R.getFilePath().str()];
+    if (auto err = repls.add(R))
+        llvm::consumeError(std::move(err));
+}
+
+inline void addReplacement(FileReplacements &fileRepls,
+                           const clang::SourceManager &SM,
+                           clang::CharSourceRange range, llvm::StringRef text,
+                           const clang::LangOptions &LO) {
+    clang::tooling::Replacement R(SM, range, text, LO);
+    auto &repls = fileRepls[R.getFilePath().str()];
+    if (auto err = repls.add(R))
+        llvm::consumeError(std::move(err));
+}
+
 inline bool isTensorType(const clang::Expr *obj) {
     if (!obj)
         return false;

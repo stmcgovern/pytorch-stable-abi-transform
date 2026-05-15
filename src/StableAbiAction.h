@@ -1,9 +1,7 @@
 #pragma once
 
-#include "AstCallbacks.h"
 #include "PreprocessorCallbacks.h"
-#include "Reporter.h"
-#include <clang/ASTMatchers/ASTMatchFinder.h>
+#include "TransformerRules.h"
 #include <clang/Basic/Diagnostic.h>
 #include <clang/Frontend/FrontendAction.h>
 #include <clang/Rewrite/Core/Rewriter.h>

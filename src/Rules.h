@@ -81,7 +81,7 @@ struct MacroRule {
 inline constexpr std::array kMacroRules = {
     MacroRule{"TORCH_CHECK", "STD_TORCH_CHECK", false},
     MacroRule{"TORCH_CHECK_NOT_IMPLEMENTED", "STD_TORCH_CHECK_NOT_IMPLEMENTED", false},
-    // TORCH_CHECK_EQ/NE/LT/GT/GE/LE handled as special cases in PreprocessorCallbacks.cpp
+    // TORCH_CHECK_EQ/NE/LT/GT/GE/LE handled via kComparisonMacroRules below
     MacroRule{"TORCH_LIBRARY", "STABLE_TORCH_LIBRARY", false},
     MacroRule{"TORCH_LIBRARY_EXPAND", "STABLE_TORCH_LIBRARY_FRAGMENT", false},
     MacroRule{"TORCH_LIBRARY_IMPL", "STABLE_TORCH_LIBRARY_IMPL", false},
@@ -243,6 +243,34 @@ struct MethodRenameRule {
 inline constexpr std::array kMethodRenameRules = {
     MethodRenameRule{"dtype", "scalar_type"},
     MethodRenameRule{"itemsize", "element_size"},
+};
+
+struct ComparisonMacroRule {
+    std::string_view name;
+    std::string_view op;
+};
+
+inline constexpr std::array kComparisonMacroRules = {
+    ComparisonMacroRule{"TORCH_CHECK_EQ", "=="},
+    ComparisonMacroRule{"TORCH_CHECK_NE", "!="},
+    ComparisonMacroRule{"TORCH_CHECK_LT", "<"},
+    ComparisonMacroRule{"TORCH_CHECK_GT", ">"},
+    ComparisonMacroRule{"TORCH_CHECK_GE", ">="},
+    ComparisonMacroRule{"TORCH_CHECK_LE", "<="},
+};
+
+struct DispatchConvRule {
+    std::string_view old_name;
+    std::string_view type_collection;
+};
+
+inline constexpr std::array kDispatchConvRules = {
+    DispatchConvRule{"AT_DISPATCH_FLOATING_TYPES", "AT_FLOATING_TYPES"},
+    DispatchConvRule{"AT_DISPATCH_ALL_TYPES", "AT_ALL_TYPES"},
+    DispatchConvRule{"AT_DISPATCH_ALL_TYPES_AND_COMPLEX", "AT_ALL_TYPES_AND_COMPLEX"},
+    DispatchConvRule{"AT_DISPATCH_INTEGRAL_TYPES", "AT_INTEGRAL_TYPES"},
+    DispatchConvRule{"AT_DISPATCH_COMPLEX_TYPES", "AT_COMPLEX_TYPES"},
+    DispatchConvRule{"AT_DISPATCH_FLOAT8_TYPES", "AT_FLOAT8_TYPES"},
 };
 
 struct FreeFuncRule {
