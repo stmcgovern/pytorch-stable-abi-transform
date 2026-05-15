@@ -151,6 +151,65 @@ void PreprocessorCallbacks::MacroExpands(const clang::Token &MacroNameTok,
         return;
     }
 
+    // TORCH_CHECK_EQ/NE/LT/GT/GE/LE(val1, val2) → STD_TORCH_CHECK((val1) OP (val2))
+    struct ComparisonMacro {
+        llvm::StringRef name;
+        llvm::StringRef op;
+    };
+    static constexpr ComparisonMacro kComparisonMacros[] = {
+        {"TORCH_CHECK_EQ", "=="},  {"TORCH_CHECK_NE", "!="},
+        {"TORCH_CHECK_LT", "<"},   {"TORCH_CHECK_GT", ">"},
+        {"TORCH_CHECK_GE", ">="},  {"TORCH_CHECK_LE", "<="},
+    };
+    for (const auto &cmp : kComparisonMacros) {
+        if (name != cmp.name)
+            continue;
+        if (!Args)
+            break;
+
+        auto getArgText = [&](unsigned idx) -> std::string {
+            const clang::Token *tok = Args->getUnexpArgument(idx);
+            if (!tok || tok->is(clang::tok::eof))
+                return {};
+            auto start = SM_.getSpellingLoc(tok->getLocation());
+            auto end = start;
+            while (tok->isNot(clang::tok::eof)) {
+                end = SM_.getSpellingLoc(tok->getLocation());
+                end = end.getLocWithOffset(tok->getLength());
+                ++tok;
+            }
+            return clang::Lexer::getSourceText(
+                       clang::CharSourceRange::getCharRange(start, end),
+                       SM_, lang_opts_)
+                .str();
+        };
+
+        std::string lhs = getArgText(0);
+        std::string rhs = getArgText(1);
+        if (lhs.empty() || rhs.empty()) {
+            reporter_.addFinding(FindingKind::Macro, SM_, loc,
+                                 cmp.name,
+                                 "could not extract arguments — rewrite manually",
+                                 true);
+            return;
+        }
+
+        std::string repl = "STD_TORCH_CHECK((" + lhs + ") " +
+                           cmp.op.str() + " (" + rhs + "))";
+
+        reporter_.addFinding(FindingKind::Macro, SM_, loc,
+                             cmp.name, "STD_TORCH_CHECK");
+        if (rewrite_mode_) {
+            auto beginLoc = SM_.getSpellingLoc(MacroNameTok.getLocation());
+            auto endLoc =
+                SM_.getSpellingLoc(Range.getEnd()).getLocWithOffset(1);
+            unsigned len =
+                SM_.getFileOffset(endLoc) - SM_.getFileOffset(beginLoc);
+            addReplacement(file_repls_, SM_, beginLoc, len, repl);
+        }
+        return;
+    }
+
     // AT_DISPATCH convenience macros → THO_DISPATCH_V2 with type collection arg
     struct DispatchConvMacro {
         llvm::StringRef old_name;

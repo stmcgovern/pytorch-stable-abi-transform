@@ -53,12 +53,13 @@ void DeviceGuardCallback::run(const MatchFinder::MatchResult &Result) {
     std::string deviceExpr;
 
     if (const auto *init = VD->getInit()) {
-        if (const auto *CE = dyn_cast<CXXConstructExpr>(init)) {
+        if (const auto *CE = dyn_cast<CXXConstructExpr>(
+                init->IgnoreImplicit())) {
             if (CE->getNumArgs() > 0) {
                 auto argText =
                     getSourceText(CE->getArg(0)->getSourceRange(), SM, LO);
-                if (const auto *callArg =
-                        dyn_cast<CallExpr>(CE->getArg(0)->IgnoreImplicit())) {
+                if (const auto *callArg = dyn_cast<CallExpr>(
+                        CE->getArg(0)->IgnoreUnlessSpelledInSource())) {
                     if (auto *callee = callArg->getDirectCallee()) {
                         if (callee->getName() == "device_of" &&
                             callArg->getNumArgs() > 0) {
