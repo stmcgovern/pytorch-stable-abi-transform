@@ -63,7 +63,7 @@ void PreprocessorCallbacks::InclusionDirective(
                              includeText,
                              "unstable include — replace with stable equivalent "
                              "or remove if unused",
-                             true);
+                             FindingAction::Flag);
     }
 }
 
@@ -145,7 +145,8 @@ void PreprocessorCallbacks::MacroExpands(const clang::Token &MacroNameTok,
         if (isInProjectScope(SM_, spellLoc, project_root_) &&
             isUnstablePrefix && !isDefinedInStableHeader) {
             reporter_.addFinding(FindingKind::Macro, SM_, spellLoc, name,
-                                 "unstable macro in macro body", true);
+                                 "unstable macro in macro body",
+                                 FindingAction::Flag);
         }
         return;
     }
@@ -157,7 +158,7 @@ void PreprocessorCallbacks::MacroExpands(const clang::Token &MacroNameTok,
         reporter_.addFinding(FindingKind::Macro, SM_, SM_.getSpellingLoc(loc),
                              "PYBIND11_MODULE",
                              "migrate to STABLE_TORCH_LIBRARY + TORCH_BOX",
-                             true);
+                             FindingAction::Flag);
         return;
     }
 
@@ -190,7 +191,7 @@ void PreprocessorCallbacks::MacroExpands(const clang::Token &MacroNameTok,
             reporter_.addFinding(FindingKind::Macro, SM_, loc,
                                  cmp.name,
                                  "could not extract arguments — rewrite manually",
-                                 true);
+                                 FindingAction::Flag);
             return;
         }
 
@@ -258,7 +259,7 @@ void PreprocessorCallbacks::MacroExpands(const clang::Token &MacroNameTok,
             }
             reporter_.addFinding(FindingKind::Macro, SM_, loc,
                                  std::string(rule.from), suggestion,
-                                 true);
+                                 FindingAction::Flag);
             return;
         }
 

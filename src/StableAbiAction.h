@@ -11,10 +11,13 @@
 
 namespace stable_abi {
 
+enum class WriteMode { Audit, Rewrite, DryRun };
+
 struct ActionOptions {
-    bool rewrite = false;
-    bool dry_run = false;
+    WriteMode write_mode = WriteMode::Audit;
     std::string project_root;
+
+    bool generates_edits() const { return write_mode != WriteMode::Audit; }
 };
 
 class StableAbiConsumer : public clang::ASTConsumer {

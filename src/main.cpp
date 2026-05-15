@@ -295,7 +295,10 @@ static int runWithConfig(stable_abi::Config &cfg,
                          cfg.verify_method, cfg.format);
     }
 
-    bool rewrite = (cfg.mode == Mode::Rewrite);
+    auto writeMode = (cfg.mode == Mode::Rewrite)
+        ? (DryRun.getValue() ? stable_abi::WriteMode::DryRun
+                             : stable_abi::WriteMode::Rewrite)
+        : stable_abi::WriteMode::Audit;
 
     std::unique_ptr<clang::tooling::FixedCompilationDatabase> ownedDB;
     clang::tooling::CompilationDatabase *db = externalDB;
@@ -326,8 +329,7 @@ static int runWithConfig(stable_abi::Config &cfg,
         });
 
     stable_abi::ActionOptions actionOpts{
-        .rewrite = rewrite,
-        .dry_run = DryRun.getValue(),
+        .write_mode = writeMode,
         .project_root = projectRoot,
     };
     auto Factory = std::make_unique<stable_abi::StableAbiActionFactory>(
@@ -348,7 +350,7 @@ static int runWithConfig(stable_abi::Config &cfg,
     }
     reporter.printParseWarnings();
 
-    if (rewrite && !actionOpts.dry_run && result == 0) {
+    if (writeMode == stable_abi::WriteMode::Rewrite && result == 0) {
         if (!json)
             llvm::outs() << "\n--- Post-rewrite ABI verification ---\n";
         int verify_result = runVerify(sources, resourceDir, cfg.pytorch_root,
@@ -363,7 +365,7 @@ static int runWithConfig(stable_abi::Config &cfg,
     }
 
     if (result == 0) {
-        if (rewrite && !actionOpts.dry_run) {
+        if (writeMode == stable_abi::WriteMode::Rewrite) {
             if (reporter.flagCount() > 0)
                 result = 1;
         } else {

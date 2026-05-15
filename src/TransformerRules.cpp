@@ -212,7 +212,9 @@ static void addTypeRules(std::vector<RewriteRule> &rules, Reporter &rep,
                 : rule.to;
 
             rep.addFinding(FindingKind::Type, SM, TL->getBeginLoc(),
-                           rule.from, suggestion, flag_only);
+                           rule.from, suggestion,
+                           flag_only ? FindingAction::Flag
+                                     : FindingAction::Rewrite);
             if (!rewrite || flag_only)
                 return noEdits();
 
@@ -282,7 +284,8 @@ static llvm::Expected<SmallVector<Edit, 1>> rewriteEnumRef(
         return noEdits();
     if (SM.isMacroBodyExpansion(loc)) {
         rep.addFinding(FindingKind::ScalarType, SM, spellingLoc,
-                       macroBodyDesc, "(inside macro body)", true);
+                       macroBodyDesc, "(inside macro body)",
+                       FindingAction::Flag);
         return noEdits();
     }
 
@@ -420,7 +423,7 @@ static void addDataPtrRule(std::vector<RewriteRule> &rules, Reporter &rep,
                     rep.addFinding(FindingKind::DataPtr, SM, *spellingLoc,
                                    "data_ptr<dependent>",
                                    "mutable_data_ptr<T> (dependent type)",
-                                   true);
+                                   FindingAction::Flag);
                     return noEdits();
                 }
             }
@@ -440,7 +443,9 @@ static void addDataPtrRule(std::vector<RewriteRule> &rules, Reporter &rep,
         if (!rewrite)
             return noEdits();
 
-        return singleEdit(memberLoc, 8, replacement);
+        return singleEdit(memberLoc,
+                          static_cast<unsigned>(std::string_view("data_ptr").size()),
+                          replacement);
     };
 
     rules.push_back(makeRule(
@@ -550,7 +555,7 @@ static void addMethodRenameRules(std::vector<RewriteRule> &rules,
         rep.addFinding(FindingKind::Type, *R.SourceManager, Ctor->getBeginLoc(),
                        text,
                        "decompose into explicit scalar_type, layout, device args",
-                       true);
+                       FindingAction::Flag);
         return noEdits();
     };
 
@@ -665,7 +670,8 @@ static void addMethodRenameRules(std::vector<RewriteRule> &rules,
             return noEdits();
         if (SM.isMacroBodyExpansion(exprLoc)) {
             rep.addFinding(FindingKind::MethodToFunc, SM, spellingLoc,
-                           "dtype", "scalar_type (inside macro body)", true);
+                           "dtype", "scalar_type (inside macro body)",
+                           FindingAction::Flag);
             return noEdits();
         }
         const bool in_macro_arg = SM.isMacroArgExpansion(exprLoc);
@@ -769,7 +775,7 @@ static void addElementSizeRules(std::vector<RewriteRule> &rules, Reporter &rep,
                                   R.Context->getLangOpts());
         rep.addFinding(FindingKind::FreeFunc, *R.SourceManager,
                        CE->getBeginLoc(), text,
-                       "tensor.element_size()", true);
+                       "tensor.element_size()", FindingAction::Flag);
         return noEdits();
     };
 
@@ -823,7 +829,8 @@ static void addFreeFuncRules(std::vector<RewriteRule> &rules, Reporter &rep,
                 std::string suggestion = std::string(rule.to) +
                     " (function name changes — adjust arguments manually)";
                 rep.addFinding(FindingKind::FreeFunc, SM, CE->getBeginLoc(),
-                               writtenText, suggestion, true);
+                               writtenText, suggestion,
+                               FindingAction::Flag);
                 return noEdits();
             }
 
@@ -882,7 +889,7 @@ static void addNbytesRule(std::vector<RewriteRule> &rules, Reporter &rep,
 
         if (!sideEffectFree) {
             rep.addFinding(FindingKind::MethodToFunc, SM, CE->getBeginLoc(),
-                           fullText, replacement, true);
+                           fullText, replacement, FindingAction::Flag);
             return noEdits();
         }
 
@@ -990,7 +997,7 @@ static void addUnstableTypeCatchAll(std::vector<RewriteRule> &rules,
         std::string msg = "no stable equivalent — rewrite or remove " + qualName;
         if (inMacroBody) msg += " (inside macro body)";
         rep.addFinding(FindingKind::Flag, SM, spelling,
-                       text, msg, true);
+                       text, msg, FindingAction::Flag);
         return noEdits();
     };
 
@@ -1036,7 +1043,7 @@ static void addUnstableRefCatchAll(std::vector<RewriteRule> &rules,
         std::string msg = "no stable equivalent — rewrite or remove " + qualName;
         if (inMacroBody) msg += " (inside macro body)";
         rep.addFinding(FindingKind::Flag, SM, spelling,
-                       text, msg, true);
+                       text, msg, FindingAction::Flag);
         return noEdits();
     };
 
@@ -1091,7 +1098,8 @@ void DeviceGuardCallback::run(const MatchFinder::MatchResult &Result) {
         if (text.find("CUDAGuard") != std::string::npos) {
             reporter_.addFinding(FindingKind::DeviceGuard, SM,
                                  SM.getSpellingLoc(loc), text,
-                                 "DeviceGuard usage inside macro body", true);
+                                 "DeviceGuard usage inside macro body",
+                                 FindingAction::Flag);
         }
         return;
     }
@@ -1166,7 +1174,7 @@ void DeviceGuardCallback::run(const MatchFinder::MatchResult &Result) {
             FindingKind::DeviceGuard, SM, loc, text,
             "torch::stable::accelerator::DeviceGuard " + varName +
                 "(tensor.get_device_index())",
-            true);
+            FindingAction::Flag);
         return;
     }
 
@@ -1212,7 +1220,8 @@ void CudaStreamCallback::run(const MatchFinder::MatchResult &Result) {
         if (isStream) {
             reporter_.addFinding(FindingKind::CudaStream, SM,
                                  SM.getSpellingLoc(loc), text,
-                                 "CUDA stream usage inside macro body", true);
+                                 "CUDA stream usage inside macro body",
+                                 FindingAction::Flag);
         }
         return;
     }
@@ -1265,7 +1274,7 @@ void CudaStreamCallback::run(const MatchFinder::MatchResult &Result) {
     reporter_.addFinding(
         FindingKind::CudaStream, SM, loc, text,
         "aoti_torch_get_current_cuda_stream(device_index, &stream_ptr)",
-        true);
+        FindingAction::Flag);
 }
 
 void registerManualMatchers(MatchFinder &finder,

@@ -10,6 +10,8 @@
 
 namespace stable_abi {
 
+enum class FindingAction { Rewrite, Flag };
+
 enum class FindingKind {
     Include,
     Macro,
@@ -30,18 +32,20 @@ struct Finding {
     unsigned col;
     std::string old_text;
     std::string new_text;
-    bool is_flag; // true = manual review needed, not auto-rewritten
+    FindingAction action;
 };
 
 class Reporter {
 public:
     void addFinding(FindingKind kind, const clang::SourceManager &SM,
                     clang::SourceLocation loc, std::string_view old_text,
-                    std::string_view new_text, bool is_flag = false);
+                    std::string_view new_text,
+                    FindingAction action = FindingAction::Rewrite);
 
     void addFinding(FindingKind kind, std::string_view file, unsigned line,
                     unsigned col, std::string_view old_text,
-                    std::string_view new_text, bool is_flag = false);
+                    std::string_view new_text,
+                    FindingAction action = FindingAction::Rewrite);
 
     void printReport() const;
     void printSummary() const;

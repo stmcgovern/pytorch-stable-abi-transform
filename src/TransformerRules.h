@@ -7,7 +7,7 @@
 
 namespace stable_abi {
 
-clang::transformer::RewriteRule buildTransformerRules(
+[[nodiscard]] clang::transformer::RewriteRule buildTransformerRules(
     Reporter &reporter, bool rewrite_mode,
     const std::string &projectRoot = "");
 

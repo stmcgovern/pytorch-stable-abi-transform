@@ -13,7 +13,7 @@ StableAbiConsumer::StableAbiConsumer(FileReplacements &fileRepls,
                                      PreprocessorCallbacks *ppCallbacks)
     : file_repls_(fileRepls), opts_(opts), pp_callbacks_(ppCallbacks),
       transformer_(
-          buildTransformerRules(rep, opts_.rewrite, opts_.project_root),
+          buildTransformerRules(rep, opts_.generates_edits(), opts_.project_root),
           [this](llvm::Expected<llvm::MutableArrayRef<
                      clang::tooling::AtomicChange>> C) {
               if (C) {
@@ -23,8 +23,8 @@ StableAbiConsumer::StableAbiConsumer(FileReplacements &fileRepls,
                   llvm::consumeError(C.takeError());
               }
           }),
-      guardCallback_(fileRepls, rep, opts_.rewrite, opts_.project_root),
-      streamCallback_(fileRepls, rep, opts_.rewrite, guardCallback_, opts_.project_root) {
+      guardCallback_(fileRepls, rep, opts_.generates_edits(), opts_.project_root),
+      streamCallback_(fileRepls, rep, opts_.generates_edits(), guardCallback_, opts_.project_root) {
     transformer_.registerMatchers(&finder_);
     registerManualMatchers(finder_, streamCallback_, guardCallback_);
 }
@@ -35,7 +35,7 @@ void StableAbiConsumer::HandleTranslationUnit(clang::ASTContext &Context) {
     if (pp_callbacks_)
         pp_callbacks_->finalizeIncludes();
 
-    if (opts_.rewrite) {
+    if (opts_.generates_edits()) {
         for (const auto &change : changes_) {
             for (const auto &r : change.getReplacements()) {
                 auto &repls = file_repls_[r.getFilePath().str()];
@@ -54,7 +54,7 @@ StableAbiFrontendAction::CreateASTConsumer(clang::CompilerInstance &CI,
 
     auto ppCallbacks = std::make_unique<PreprocessorCallbacks>(
         file_repls_, reporter_, CI.getSourceManager(), CI.getLangOpts(),
-        opts_.rewrite, opts_.project_root);
+        opts_.generates_edits(), opts_.project_root);
     auto *ppRaw = ppCallbacks.get();
     CI.getPreprocessor().addPPCallbacks(std::move(ppCallbacks));
 
@@ -145,13 +145,13 @@ static void printUnifiedDiff(const std::string &filename,
 }
 
 void StableAbiFrontendAction::EndSourceFileAction() {
-    if (opts_.rewrite) {
+    if (opts_.generates_edits()) {
         for (auto &[filename, repls] : file_repls_) {
             if (!clang::tooling::applyAllReplacements(repls, rewriter_))
                 llvm::errs() << "warning: failed to apply replacements to "
                              << filename << "\n";
         }
-        if (opts_.dry_run) {
+        if (opts_.write_mode == WriteMode::DryRun) {
             auto &SM = rewriter_.getSourceMgr();
             for (auto it = rewriter_.buffer_begin();
                  it != rewriter_.buffer_end(); ++it) {
