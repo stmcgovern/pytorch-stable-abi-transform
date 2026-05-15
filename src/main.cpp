@@ -80,23 +80,32 @@ static std::string detectCudaInclude() {
     return "";
 }
 
-static stable_abi::VerifyOptions buildVerifyOptions(const std::string &resourceDir) {
+static stable_abi::VerifyOptions buildVerifyOptions(
+    const std::string &resourceDir,
+    const std::string &pytorchRoot,
+    const std::vector<std::string> &extraIncludes,
+    const std::string &cudaInclude) {
     stable_abi::VerifyOptions opts;
-    opts.pytorch_root = PytorchRoot.getValue();
+    opts.pytorch_root = pytorchRoot;
     opts.resource_dir = resourceDir;
-    opts.extra_includes = std::vector<std::string>(ExtraIncludes.begin(),
-                                                   ExtraIncludes.end());
-    opts.cuda_include = CudaInclude.getValue();
+    opts.extra_includes = extraIncludes;
+    opts.cuda_include = cudaInclude;
     if (opts.cuda_include.empty())
         opts.cuda_include = detectCudaInclude();
     return opts;
 }
 
 static int runVerify(const std::vector<std::string> &sources,
-                     const std::string &resourceDir, bool json,
+                     const std::string &resourceDir,
+                     const std::string &pytorchRoot,
+                     const std::vector<std::string> &extraIncludes,
+                     const std::string &cudaInclude,
+                     const std::string &verifyMethod,
+                     bool json,
                      bool allow_fallback = false) {
-    bool use_compile = (VerifyMethod.getValue() == "compile");
-    auto opts = buildVerifyOptions(resourceDir);
+    bool use_compile = (verifyMethod == "compile");
+    auto opts = buildVerifyOptions(resourceDir, pytorchRoot,
+                                   extraIncludes, cudaInclude);
 
     if (use_compile && opts.pytorch_root.empty()) {
         if (allow_fallback) {
@@ -173,6 +182,17 @@ static void applyCliOverrides(stable_abi::Config &cfg) {
             ExtraIncludes.begin(), ExtraIncludes.end());
 }
 
+static bool validateSources(const std::vector<std::string> &sources) {
+    bool missing = false;
+    for (const auto &src : sources) {
+        if (!llvm::sys::fs::exists(src)) {
+            llvm::errs() << "error: source file not found: " << src << "\n";
+            missing = true;
+        }
+    }
+    return !missing;
+}
+
 static int runWithConfig(stable_abi::Config &cfg) {
     if (cfg.mode != "audit" && cfg.mode != "rewrite" && cfg.mode != "verify") {
         llvm::errs() << "error: unknown mode '" << cfg.mode
@@ -189,19 +209,6 @@ static int runWithConfig(stable_abi::Config &cfg) {
     }
 
     bool json = (cfg.format == "json");
-
-    if (cfg.mode == "verify") {
-        PytorchRoot.setValue(cfg.pytorch_root);
-        VerifyMethod.setValue(cfg.verify_method);
-        CudaInclude.setValue(cfg.cuda_include);
-        ExtraIncludes.clear();
-        for (const auto &inc : cfg.extra_includes) {
-            ExtraIncludes.push_back(inc);
-        }
-        return runVerify(cfg.sources, resourceDir, json);
-    }
-
-    bool rewrite = (cfg.mode == "rewrite");
 
     std::string projectRoot = cfg.project_root;
     if (!projectRoot.empty()) {
@@ -232,15 +239,16 @@ static int runWithConfig(stable_abi::Config &cfg) {
         return 1;
     }
 
-    bool missing = false;
-    for (const auto &src : sources) {
-        if (!llvm::sys::fs::exists(src)) {
-            llvm::errs() << "error: source file not found: " << src << "\n";
-            missing = true;
-        }
-    }
-    if (missing)
+    if (!validateSources(sources))
         return 1;
+
+    if (cfg.mode == "verify") {
+        return runVerify(sources, resourceDir, cfg.pytorch_root,
+                         cfg.extra_includes, cfg.cuda_include,
+                         cfg.verify_method, json);
+    }
+
+    bool rewrite = (cfg.mode == "rewrite");
 
     std::vector<std::string> clangArgs;
     for (const auto &flag : cfg.compiler_flags)
@@ -288,14 +296,9 @@ static int runWithConfig(stable_abi::Config &cfg) {
     if (rewrite && !dryRun && result == 0) {
         if (!json)
             llvm::outs() << "\n--- Post-rewrite ABI verification ---\n";
-        PytorchRoot.setValue(cfg.pytorch_root);
-        VerifyMethod.setValue(cfg.verify_method);
-        CudaInclude.setValue(cfg.cuda_include);
-        ExtraIncludes.clear();
-        for (const auto &inc : cfg.extra_includes) {
-            ExtraIncludes.push_back(inc);
-        }
-        int verify_result = runVerify(sources, resourceDir, json, true);
+        int verify_result = runVerify(sources, resourceDir, cfg.pytorch_root,
+                                      cfg.extra_includes, cfg.cuda_include,
+                                      cfg.verify_method, json, true);
         if (verify_result > 0) {
             if (!json)
                 llvm::outs() << "\nUnstable API references remain. "
@@ -391,7 +394,13 @@ int main(int argc, const char **argv) {
     }
 
     if (Mode.getValue() == "verify") {
-        return runVerify(sources, resourceDir, json);
+        if (!validateSources(sources))
+            return 1;
+        auto extraIncs = std::vector<std::string>(ExtraIncludes.begin(),
+                                                   ExtraIncludes.end());
+        return runVerify(sources, resourceDir, PytorchRoot.getValue(),
+                         extraIncs, CudaInclude.getValue(),
+                         VerifyMethod.getValue(), json);
     }
 
     bool rewrite = (Mode.getValue() == "rewrite");
@@ -424,14 +433,7 @@ int main(int argc, const char **argv) {
         return 1;
     }
 
-    bool missingLegacy = false;
-    for (const auto &src : sources) {
-        if (!llvm::sys::fs::exists(src)) {
-            llvm::errs() << "error: source file not found: " << src << "\n";
-            missingLegacy = true;
-        }
-    }
-    if (missingLegacy)
+    if (!validateSources(sources))
         return 1;
 
     clang::tooling::ClangTool Tool(OptionsParser.getCompilations(), sources);
@@ -472,7 +474,14 @@ int main(int argc, const char **argv) {
     if (rewrite && !dryRunLegacy && result == 0) {
         if (!json)
             llvm::outs() << "\n--- Post-rewrite ABI verification ---\n";
-        int verify_result = runVerify(sources, resourceDir, json, true);
+        auto extraIncsPost = std::vector<std::string>(ExtraIncludes.begin(),
+                                                       ExtraIncludes.end());
+        int verify_result = runVerify(sources, resourceDir,
+                                      PytorchRoot.getValue(),
+                                      extraIncsPost,
+                                      CudaInclude.getValue(),
+                                      VerifyMethod.getValue(),
+                                      json, true);
         if (verify_result > 0) {
             if (!json)
                 llvm::outs() << "\nUnstable API references remain. "

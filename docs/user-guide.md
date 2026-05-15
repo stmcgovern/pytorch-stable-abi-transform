@@ -223,4 +223,4 @@ PYTORCH_DIR=/path/to/pytorch RESOURCE_DIR=/usr/lib/clang/19 bash test/run_tests.
 
 `PYTORCH_DIR` is required (points to your PyTorch source tree). `RESOURCE_DIR` defaults to `/usr/lib/clang/19`.
 
-13 test cases with input/expected pairs in `test/inputs/` and `test/expected/`. The test suite runs three passes: rewrite correctness, regex verification, and compile-based verification.
+13 test cases with input/expected pairs in `test/inputs/` and `test/expected/`. The test suite runs four passes: rewrite correctness, regex verification, exit code validation, and compile-based verification.
